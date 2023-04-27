@@ -27,6 +27,7 @@
   "exclude": ["dist", "build", "tests", "**/*.spec.js", "node_modules"],
   "ts-node": {
     "esm": true,
-    "transpileOnly": true
+    "transpileOnly": true,
+    "experimentalSpecifierResolution": "node"
   }
 }
