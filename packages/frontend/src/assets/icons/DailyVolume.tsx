@@ -1,7 +1,0 @@
-export default () => (
-  <svg width="19" height="18" viewBox="0 0 19 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M0.5 10.5V17.5H18.5V16L9.5 9L5.5 14.5L0.5 10.5ZM0.5 4.5L4.5 7.5L9.5 0.5L14.5 4.5H18.5V13.47L9.1 6.16L5.12 11.64L0.5 7.94V4.5Z"
-      fill="#8E91A5"/>
-  </svg>
-)
