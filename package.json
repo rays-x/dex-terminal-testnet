@@ -6,7 +6,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=19"
+    "node": "19.9.0"
   },
   "scripts": {
     "copyfiles": "copyfiles -u 1 src/**/*.{html,css,scss,ttf,woff,woff2,eot,svg,jpg,png,json,csv,yml} dist/",
