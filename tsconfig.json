@@ -23,7 +23,7 @@
     "types": ["node"],
     "typeRoots": ["node_modules/@types", "declarations"]
   },
-  "include": ["src", "declarations"],
+  "include": ["src", "declarations", "./.eslintrc.cjs"],
   "exclude": ["dist", "build", "tests", "**/*.spec.js", "node_modules"],
   "ts-node": {
     "esm": true,

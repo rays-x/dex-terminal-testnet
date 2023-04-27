@@ -22,7 +22,7 @@
     "generate:types": "dotenv payload generate:types",
     "docker:build": "docker buildx build --build-arg BUILD_ENV=production --platform linux/amd64 -t bardakdev/ray .",
     "docker:push": "docker push bardakdev/ray",
-    "lint": "eslint . --ext .js,.ts"
+    "lint": "eslint . --ext .ts"
   },
   "dependencies": {
     "@mailchimp/mailchimp_transactional": "1.0.48",
