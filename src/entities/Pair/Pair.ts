@@ -1,4 +1,4 @@
-import { index, modelOptions, prop, Ref } from '@typegoose/typegoose';
+import Typegoose from '@typegoose/typegoose';
 import BaseEntity from '../BaseEntity';
 import {
   defaultModelOptions,
@@ -9,6 +9,8 @@ import TokenEntity, { TokenEntityDefaultPopulateSelect } from '../Token/Token';
 import PlatformEntity, {
   PlatformEntityDefaultPopulateSelect,
 } from '../Platform';
+
+const { index, modelOptions, prop } = Typegoose;
 
 @modelOptions({
   ...defaultModelOptions,
@@ -61,25 +63,25 @@ export class PairEntity extends BaseEntity {
     required: true,
     ref: () => TokenEntity,
   })
-  base!: Ref<TokenEntity>;
+  base!: Typegoose.Ref<TokenEntity>;
 
   @prop({
     required: true,
     ref: () => TokenEntity,
   })
-  quote!: Ref<TokenEntity>;
+  quote!: Typegoose.Ref<TokenEntity>;
 
   @prop({
     required: true,
     ref: () => DexEntity,
   })
-  dex!: Ref<DexEntity>;
+  dex!: Typegoose.Ref<DexEntity>;
 
   @prop({
     required: true,
     ref: () => PlatformEntity,
   })
-  platform!: Ref<PlatformEntity>;
+  platform!: Typegoose.Ref<PlatformEntity>;
 
   @prop({ required: true })
   address!: string;

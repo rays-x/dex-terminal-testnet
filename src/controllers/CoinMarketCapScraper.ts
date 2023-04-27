@@ -10,8 +10,8 @@ import {
   Req,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { Request } from 'express';
-import { get } from 'lodash';
+import express from 'express';
+import { get } from 'lodash-es';
 import got from 'got';
 import { CoinMarketCapScraperService } from '../services/coinMarketCapScraper';
 import {
@@ -129,7 +129,10 @@ export class CoinMarketCapScraperController {
 
   @Get('proxy*')
   @HttpCode(200)
-  async proxy(@Req() request: Request, @Query() query: string): Promise<any> {
+  async proxy(
+    @Req() request: express.Request,
+    @Query() query: string
+  ): Promise<any> {
     try {
       const { body } = await got.get(
         `https://api.coinmarketcap.com${get(request, 'params.0')}`,

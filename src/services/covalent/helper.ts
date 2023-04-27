@@ -1,4 +1,4 @@
-import { get, set } from 'lodash';
+import { get, set } from 'lodash-es';
 import got from 'got';
 import { CovalentStatsLiquidityQuery } from '../../types/Covalent/CovalentStatsTransfersQuery';
 

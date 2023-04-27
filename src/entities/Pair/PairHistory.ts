@@ -1,10 +1,12 @@
-import { index, modelOptions, prop, Ref } from '@typegoose/typegoose';
+import Typegoose from '@typegoose/typegoose';
 import {
   defaultModelOptions,
   defaultSchemaOptions,
 } from '../../mongoose.config';
 import SimpleEntity from '../SimpleEntity';
 import PairEntity from './Pair';
+
+const { index, modelOptions, prop } = Typegoose;
 
 @modelOptions({
   ...defaultModelOptions,
@@ -36,7 +38,7 @@ export class PairHistoryEntity extends SimpleEntity {
     required: true,
     ref: () => PairEntity,
   })
-  pair!: Ref<PairEntity>;
+  pair!: Typegoose.Ref<PairEntity>;
 
   @prop({ required: true })
   date!: Date;

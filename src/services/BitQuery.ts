@@ -1,4 +1,4 @@
-import { get, set } from 'lodash';
+import { get, set } from 'lodash-es';
 import Redis from 'ioredis';
 import { InjectRedisClient } from 'nestjs-ioredis-tags';
 import got from 'got';

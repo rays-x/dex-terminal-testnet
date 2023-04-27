@@ -1,13 +1,13 @@
 import { Payload, Subscribe, Topic } from 'nest-mqtt';
 import Docker from 'dockerode';
 import { InjectAwsService } from 'nest-aws-sdk';
-import { S3 } from 'aws-sdk';
+import AwsSDK from 'aws-sdk';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { dump as json2Yaml, load as yaml2Json } from 'js-yaml';
-import { get, merge } from 'lodash';
+import { get, merge } from 'lodash-es';
 import { InjectModel } from 'nestjs-typegoose';
-import { ReturnModelType } from '@typegoose/typegoose';
+import Typegoose from '@typegoose/typegoose';
 import { Types } from 'mongoose';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import ExchangeEntity from '../entities/Bot/Exchange';
@@ -29,17 +29,21 @@ export class BotManagerService {
   });
 
   constructor(
-    @InjectAwsService(S3) private readonly s3: S3,
+    @InjectAwsService(AwsSDK.S3) private readonly s3: AwsSDK.S3,
     @InjectModel(ExchangeEntity)
-    private readonly repoExchange: ReturnModelType<typeof ExchangeEntity>,
+    private readonly repoExchange: Typegoose.ReturnModelType<
+      typeof ExchangeEntity
+    >,
     @InjectModel(StrategyEntity)
-    private readonly repoStrategy: ReturnModelType<typeof StrategyEntity>,
+    private readonly repoStrategy: Typegoose.ReturnModelType<
+      typeof StrategyEntity
+    >,
     @InjectModel(UserEntity)
-    private readonly repoUser: ReturnModelType<typeof UserEntity>,
+    private readonly repoUser: Typegoose.ReturnModelType<typeof UserEntity>,
     @InjectModel(BotEntity)
-    private readonly repoBot: ReturnModelType<typeof BotEntity>,
+    private readonly repoBot: Typegoose.ReturnModelType<typeof BotEntity>,
     @InjectModel(BotLogEntity)
-    private readonly repoBotLog: ReturnModelType<typeof BotLogEntity>
+    private readonly repoBotLog: Typegoose.ReturnModelType<typeof BotLogEntity>
   ) {}
 
   async userExchangeUpsert(address: string, { id, params }) {

@@ -1,9 +1,11 @@
-import { modelOptions, prop, Ref } from '@typegoose/typegoose';
+import Typegoose from '@typegoose/typegoose';
 import {
   defaultModelOptions,
   defaultSchemaOptions,
 } from '../../mongoose.config';
 import ExchangeEntity from './Exchange';
+
+const { modelOptions, prop } = Typegoose;
 
 @modelOptions({
   ...defaultModelOptions,
@@ -26,7 +28,7 @@ export class UserExchanges {
     required: true,
     ref: () => ExchangeEntity,
   })
-  exchange?: Ref<ExchangeEntity>;
+  exchange?: Typegoose.Ref<ExchangeEntity>;
 
   @prop({
     required: true,

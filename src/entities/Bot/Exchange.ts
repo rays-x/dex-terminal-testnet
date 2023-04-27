@@ -1,10 +1,12 @@
-import { index, modelOptions, prop } from '@typegoose/typegoose';
+import Typegoose from '@typegoose/typegoose';
 import BaseEntity from '../BaseEntity';
 import {
   defaultModelOptions,
   defaultSchemaOptions,
 } from '../../mongoose.config';
 import { ExchangeParams } from './ExchangeParams';
+
+const { index, modelOptions, prop } = Typegoose;
 
 enum ExchangeType {
   SPOT_CLOB_CEX = 'SPOT_CLOB_CEX',

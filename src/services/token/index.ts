@@ -1,4 +1,4 @@
-import { chunk, get, set, take } from 'lodash';
+import { chunk, get, set, take } from 'lodash-es';
 import Redis from 'ioredis';
 import { InjectRedisClient } from 'nestjs-ioredis-tags';
 import got from 'got';
@@ -9,7 +9,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { OptionsOfJSONResponseBody } from 'got/dist/source/types';
-import { ReturnModelType } from '@typegoose/typegoose';
+import Typegoose from '@typegoose/typegoose';
 import { InjectModel } from 'nestjs-typegoose';
 import { addDays, differenceInDays, format } from 'date-fns';
 import { Types } from 'mongoose';
@@ -133,21 +133,27 @@ export class TokenService implements OnModuleInit {
   constructor(
     @InjectRedisClient(REDIS_TAG) private readonly redisClient: Redis,
     @InjectModel(TokenEntity)
-    private readonly repoToken: ReturnModelType<typeof TokenEntity>,
+    private readonly repoToken: Typegoose.ReturnModelType<typeof TokenEntity>,
     @InjectModel(TokenTagEntity)
-    private readonly repoTokenTag: ReturnModelType<typeof TokenTagEntity>,
+    private readonly repoTokenTag: Typegoose.ReturnModelType<
+      typeof TokenTagEntity
+    >,
     @InjectModel(PlatformEntity)
-    private readonly repoPlatform: ReturnModelType<typeof PlatformEntity>,
+    private readonly repoPlatform: Typegoose.ReturnModelType<
+      typeof PlatformEntity
+    >,
     @InjectModel(TokenHistoryEntity)
-    private readonly repoTokenHistory: ReturnModelType<
+    private readonly repoTokenHistory: Typegoose.ReturnModelType<
       typeof TokenHistoryEntity
     >,
     @InjectModel(PairEntity)
-    private readonly repoPair: ReturnModelType<typeof PairEntity>,
+    private readonly repoPair: Typegoose.ReturnModelType<typeof PairEntity>,
     @InjectModel(PairHistoryEntity)
-    private readonly repoPairHistory: ReturnModelType<typeof PairHistoryEntity>,
+    private readonly repoPairHistory: Typegoose.ReturnModelType<
+      typeof PairHistoryEntity
+    >,
     @InjectModel(DexEntity)
-    private readonly repoDex: ReturnModelType<typeof DexEntity>,
+    private readonly repoDex: Typegoose.ReturnModelType<typeof DexEntity>,
     @Inject(BitQueryService) private readonly bitQueryService: BitQueryService
   ) {}
 

@@ -1,9 +1,11 @@
-import { Ref, prop } from '@typegoose/typegoose';
+import Typegoose from '@typegoose/typegoose';
 import TokenTagEntity from '../TokenTag';
+
+const { prop } = Typegoose;
 
 export default class TokenTag {
   @prop({
     ref: () => TokenTagEntity,
   })
-  tag?: Ref<TokenTagEntity>;
+  tag?: Typegoose.Ref<TokenTagEntity>;
 }

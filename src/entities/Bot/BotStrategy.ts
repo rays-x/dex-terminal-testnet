@@ -1,9 +1,11 @@
-import { modelOptions, prop, Ref } from '@typegoose/typegoose';
+import Typegoose from '@typegoose/typegoose';
 import {
   defaultModelOptions,
   defaultSchemaOptions,
 } from '../../mongoose.config';
 import StrategyEntity from './Strategy';
+
+const { modelOptions, prop } = Typegoose;
 
 @modelOptions({
   ...defaultModelOptions,
@@ -24,7 +26,7 @@ export class BotStrategy {
     required: true,
     ref: () => StrategyEntity,
   })
-  id?: Ref<StrategyEntity>;
+  id?: Typegoose.Ref<StrategyEntity>;
 
   @prop({
     required: true,

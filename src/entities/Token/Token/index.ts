@@ -1,4 +1,4 @@
-import { index, modelOptions, plugin, prop } from '@typegoose/typegoose';
+import Typegoose from '@typegoose/typegoose';
 import autopopulate from 'mongoose-autopopulate';
 import BaseEntity from '../../BaseEntity';
 import {
@@ -11,6 +11,8 @@ import { TokenPlatform } from '../TokenPlatforms';
 import { PlatformEntityDefaultPopulateSelect } from '../../Platform';
 
 import TokenTag from './tag';
+
+const { index, modelOptions, prop, plugin } = Typegoose;
 
 @plugin(autopopulate)
 @modelOptions({

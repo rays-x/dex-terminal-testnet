@@ -7,7 +7,7 @@ import {
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Types } from 'mongoose';
-import { TokensSortBy, TokensSortOrder } from './coinMarketCapScraper/types';
+import { TokensSortBy, TokensSortOrder } from './coinMarketCapScraper';
 
 export class SwapTokensQueryDto {
   @IsOptional()

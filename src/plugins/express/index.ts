@@ -1,11 +1,11 @@
-import { Express } from 'express';
+import express from 'express';
 import cors from 'cors';
 import session, { SessionData } from 'express-session';
 import connectRedis from 'connect-redis';
 import Redis from 'ioredis';
 import { TaggableCache as RedisTaggable } from 'cache-tags';
 import cookieParser from 'cookie-parser';
-import { get } from 'lodash';
+import { get } from 'lodash-es';
 import { parse } from 'cookie';
 import { REDIS_SESSION_PREFIX } from '../../constants';
 
@@ -47,11 +47,11 @@ RedisSessionStore.set = function setter(
   }
 };
 
-const expressPlugins = (express: Express) => {
-  express.disable('x-powered-by');
-  express.set('trust proxy', true);
-  express.set('trust proxy', true);
-  express.use(
+const expressPlugins = (expressInstance: express.Express) => {
+  expressInstance.disable('x-powered-by');
+  expressInstance.set('trust proxy', true);
+  expressInstance.set('trust proxy', true);
+  expressInstance.use(
     cors({
       origin: true, // [`${process.env.SERVER_URL}`, `${process.env.FRONTEND_URL}`, `${process.env.FRONTEND_MM_URL}`],
       allowedHeaders: [
@@ -75,8 +75,8 @@ const expressPlugins = (express: Express) => {
       credentials: true,
     })
   );
-  express.use(cookieParser());
-  express.use((req, res, next) => {
+  expressInstance.use(cookieParser());
+  expressInstance.use((req, res, next) => {
     if (req.method === 'OPTIONS') {
       return res.sendStatus(204);
     }
@@ -100,7 +100,7 @@ const expressPlugins = (express: Express) => {
     return next();
   });
 
-  express.use((req, res, next) => {
+  expressInstance.use((req, res, next) => {
     const domain = process.env.SERVER_COOKIE_HOST || process.env.SERVER_HOST;
     /* let webDomain = undefined;
     try {

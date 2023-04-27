@@ -1,10 +1,12 @@
-import { modelOptions, prop, Ref } from '@typegoose/typegoose';
+import Typegoose from '@typegoose/typegoose';
 import BaseEntity from '../BaseEntity';
 import {
   defaultModelOptions,
   defaultSchemaOptions,
 } from '../../mongoose.config';
 import BotEntity from './Bot';
+
+const { modelOptions, prop } = Typegoose;
 
 export enum BotLogType {
   log = 'log',
@@ -34,7 +36,7 @@ export class BotLogEntity extends BaseEntity {
     required: true,
     ref: () => BotEntity,
   })
-  bot?: Ref<BotEntity>;
+  bot?: Typegoose.Ref<BotEntity>;
 
   @prop({
     required: true,

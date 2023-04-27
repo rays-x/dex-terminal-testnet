@@ -1,6 +1,8 @@
-import { index, modelOptions, prop, Ref } from '@typegoose/typegoose';
+import Typegoose from '@typegoose/typegoose';
 import { defaultModelOptions, defaultSchemaOptions } from '../mongoose.config';
 import PlatformEntity from './Platform';
+
+const { index, modelOptions, prop } = Typegoose;
 
 @modelOptions({
   ...defaultModelOptions,
@@ -40,7 +42,7 @@ export class DexEntity {
     required: false,
     ref: () => PlatformEntity,
   })
-  platform?: Ref<PlatformEntity>;
+  platform?: Typegoose.Ref<PlatformEntity>;
 }
 
 export const DexEntityDefaultSelect = ['id', 'name'];

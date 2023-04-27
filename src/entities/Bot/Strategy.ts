@@ -1,10 +1,12 @@
-import { index, modelOptions, prop } from '@typegoose/typegoose';
+import Typegoose from '@typegoose/typegoose';
 import BaseEntity from '../BaseEntity';
 import {
   defaultModelOptions,
   defaultSchemaOptions,
 } from '../../mongoose.config';
 import { StrategyParams } from './StrategyParams';
+
+const { index, modelOptions, prop } = Typegoose;
 
 @modelOptions({
   ...defaultModelOptions,

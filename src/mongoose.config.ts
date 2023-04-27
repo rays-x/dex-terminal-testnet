@@ -1,6 +1,8 @@
 import { SchemaOptions } from 'mongoose';
 import { ICustomOptions } from '@typegoose/typegoose/lib/types';
-import { Severity } from '@typegoose/typegoose';
+import Typegoose from '@typegoose/typegoose';
+
+const { Severity } = Typegoose;
 
 export const MONGO_URI = process.env.MONGO_CONNECTION_STRING;
 export const MONGO_CONFIG: any = {

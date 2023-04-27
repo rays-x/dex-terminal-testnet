@@ -1,6 +1,6 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 import { Types } from 'mongoose';
-import { get } from 'lodash';
+import { get } from 'lodash-es';
 
 export const UserId = createParamDecorator(
   (key: string, ctx: ExecutionContext): Types.ObjectId =>

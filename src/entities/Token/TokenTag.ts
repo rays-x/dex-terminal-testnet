@@ -1,9 +1,11 @@
-import { modelOptions, prop } from '@typegoose/typegoose';
+import Typegoose from '@typegoose/typegoose';
 import BaseEntity from '../BaseEntity';
 import {
   defaultModelOptions,
   defaultSchemaOptions,
 } from '../../mongoose.config';
+
+const { modelOptions, prop } = Typegoose;
 
 @modelOptions({
   ...defaultModelOptions,

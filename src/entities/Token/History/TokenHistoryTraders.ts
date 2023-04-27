@@ -1,4 +1,6 @@
-import { prop } from '@typegoose/typegoose';
+import Typegoose from '@typegoose/typegoose';
+
+const { prop } = Typegoose;
 
 export class TokenHistoryTraders {
   @prop()

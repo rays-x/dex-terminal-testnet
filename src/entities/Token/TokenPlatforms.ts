@@ -1,9 +1,11 @@
-import { modelOptions, prop, Ref } from '@typegoose/typegoose';
+import Typegoose from '@typegoose/typegoose';
 import {
   defaultModelOptions,
   defaultSchemaOptions,
 } from '../../mongoose.config';
 import PlatformEntity from '../Platform';
+
+const { modelOptions, prop } = Typegoose;
 
 @modelOptions({
   ...defaultModelOptions,
@@ -30,7 +32,7 @@ export class TokenPlatform {
     required: true,
     ref: () => PlatformEntity,
   })
-  platform?: Ref<PlatformEntity>;
+  platform?: Typegoose.Ref<PlatformEntity>;
 
   @prop({
     required: true,

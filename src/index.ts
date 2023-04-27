@@ -1,11 +1,11 @@
+import { URL } from 'url';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import {
   ExpressAdapter,
   NestExpressApplication,
 } from '@nestjs/platform-express';
-import { join } from 'path';
-import express, { Express } from 'express';
+import express from 'express';
 import mongoose from 'mongoose';
 import {
   AsyncApiDocumentBuilder,
@@ -13,6 +13,7 @@ import {
   AsyncServerObject,
 } from 'nestjs-asyncapi';
 import { ValidationPipe } from '@nestjs/common';
+
 import { PORT } from './constants';
 import { Logger, LogLevel } from './config/logger/api-logger';
 import { DefaultLogger } from './config/logger/default-logger';
@@ -43,7 +44,7 @@ process.setMaxListeners(0);
   );
   Logger.info(`Bootstrapping ray.sx (pid: ${process.pid}) 🚀`);
   DefaultLogger.hideNestBootstrapLogs();
-  const expressApp: Express = express();
+  const expressApp = express();
   const adapter = new ExpressAdapter(expressApp);
   const app = await NestFactory.create<NestExpressApplication>(
     AppModule,
@@ -54,13 +55,19 @@ process.setMaxListeners(0);
   );
 
   expressPlugins(expressApp);
-  app.useStaticAssets(join(__dirname, 'payload/client/static'), {
-    prefix: '/static/',
-  });
-  app.useStaticAssets(join(__dirname, 'payload/client/static'), {
-    prefix: '/client/static/',
-  });
-  app.useStaticAssets(join(__dirname, '../media'), {
+  app.useStaticAssets(
+    new URL('payload/client/static', import.meta.url).pathname,
+    {
+      prefix: '/static/',
+    }
+  );
+  app.useStaticAssets(
+    new URL('payload/client/static', import.meta.url).pathname,
+    {
+      prefix: '/client/static/',
+    }
+  );
+  app.useStaticAssets(new URL('../media', import.meta.url).pathname, {
     prefix: '/media/',
   });
   app.useGlobalPipes(

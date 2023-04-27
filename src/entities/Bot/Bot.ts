@@ -1,4 +1,4 @@
-import { index, modelOptions, prop, Ref } from '@typegoose/typegoose';
+import Typegoose from '@typegoose/typegoose';
 import BaseEntity from '../BaseEntity';
 import {
   defaultModelOptions,
@@ -6,6 +6,8 @@ import {
 } from '../../mongoose.config';
 import { BotStrategy } from './BotStrategy';
 import UserEntity from './User';
+
+const { index, modelOptions, prop } = Typegoose;
 
 export enum BotStatus {
   running = 'running',
@@ -54,7 +56,7 @@ export class BotEntity extends BaseEntity {
     required: true,
     ref: () => UserEntity,
   })
-  user?: Ref<UserEntity>;
+  user?: Typegoose.Ref<UserEntity>;
 
   @prop({
     required: true,

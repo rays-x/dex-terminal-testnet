@@ -1,4 +1,4 @@
-import { modelOptions, prop } from '@typegoose/typegoose';
+import Typegoose from '@typegoose/typegoose';
 
 import {
   defaultModelOptions,
@@ -6,6 +6,8 @@ import {
 } from '../../../mongoose.config';
 
 import TokenUrlsItem from './item';
+
+const { modelOptions, prop } = Typegoose;
 
 @modelOptions({
   ...defaultModelOptions,

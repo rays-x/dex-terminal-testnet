@@ -4,7 +4,7 @@ import { RedisModule } from 'nestjs-ioredis-tags';
 import { ScheduleModule } from '@nestjs/schedule';
 import { MailchimpModule } from '@mindik/mailchimp-nestjs';
 import { AwsSdkModule } from 'nest-aws-sdk';
-import { S3 } from 'aws-sdk';
+import AwsSDK from 'aws-sdk';
 import * as process from 'process';
 import { REDIS_TAG } from './constants';
 import * as modules from './modules.exported';
@@ -32,7 +32,7 @@ import { Logger } from './config/logger/api-logger';
           secretAccessKey: process.env.S3_ACCESS_SECRET_KEY,
         },
       },
-      services: [S3],
+      services: [AwsSDK.S3],
     }),
     ScheduleModule.forRoot(),
     ...Object.values(modules),

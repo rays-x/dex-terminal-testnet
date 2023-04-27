@@ -1,4 +1,4 @@
-import { PhoneNumberFormat, PhoneNumberUtil } from 'google-libphonenumber';
+import GooglePhoneNumber from 'google-libphonenumber';
 import { isEmail } from 'class-validator';
 
 export function promiseMap<T = any, R = any>(
@@ -32,10 +32,10 @@ export function getPhone(str?: string | unknown): string | null {
     phoneDigits = `7${phoneDigits}`;
   }
   try {
-    const glp = PhoneNumberUtil.getInstance();
+    const glp = GooglePhoneNumber.PhoneNumberUtil.getInstance();
     const number = glp.parse(`+${phoneDigits}`);
     if (glp.isPossibleNumber(number)) {
-      phone = glp.format(number, PhoneNumberFormat.E164);
+      phone = glp.format(number, GooglePhoneNumber.PhoneNumberFormat.E164);
     }
   } catch (e) {
     return null;

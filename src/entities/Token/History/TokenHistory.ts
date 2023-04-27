@@ -1,4 +1,4 @@
-import { index, modelOptions, prop, Ref } from '@typegoose/typegoose';
+import Typegoose from '@typegoose/typegoose';
 import {
   defaultModelOptions,
   defaultSchemaOptions,
@@ -9,6 +9,8 @@ import { TokenHistoryTransfers } from './TokenHistoryTransfers';
 import { TokenHistorySwaps } from './TokenHistorySwaps';
 import { TokenHistoryHolders } from './TokenHistoryHolders';
 import { TokenHistoryTraders } from './TokenHistoryTraders';
+
+const { index, modelOptions, prop } = Typegoose;
 
 @modelOptions({
   ...defaultModelOptions,
@@ -40,7 +42,7 @@ export class TokenHistoryEntity extends SimpleEntity {
     required: true,
     ref: () => TokenEntity,
   })
-  token!: Ref<TokenEntity>;
+  token!: Typegoose.Ref<TokenEntity>;
 
   @prop({ required: true })
   volume!: number;
