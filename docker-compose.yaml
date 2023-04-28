@@ -1,11 +1,10 @@
 version: '3.7'
 
 services:
-
-#  nginx:
-#    image: ray-nginx-local:latest
-#    ports:
-#      - 2055:80
+  # nginx:
+  #  image: ray-nginx-local:latest
+  #  ports:
+  #    - 2055:80
 
   mongo:
     container_name: "ray_mongo"
@@ -46,9 +45,11 @@ services:
 
   rabbitmq:
     container_name: hb_rabbitmq
-    image: bardakdev/rabbitmq
+    image: rabbitmq:3.11-management-alpine
     ports:
       - "1883:1883"
+      - "5672:5672"
+      - "15672:15672"
     volumes:
       - ./docker/rabbitmq/20-main.conf:/etc/rabbitmq/conf.d/20-main.conf:ro
       - rabbitmq-data:/var/lib/rabbitmq
@@ -79,12 +80,12 @@ networks:
 volumes:
   mongo-db:
     name: "ray_mongo-db"
-    external: true
+    # external: true
   mongo-db-config:
     name: "ray_mongo-db-config"
   redis:
     name: "ray_redis"
-    external: true
+    # external: true
   pg-data:
     name: "hb.postgres"
   minio-data:
