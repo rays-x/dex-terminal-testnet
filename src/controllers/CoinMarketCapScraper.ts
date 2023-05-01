@@ -32,23 +32,17 @@ import { HttpStatusMessages } from '../messages/http';
 @ApiTags('cmc')
 @Controller('/api/rest/cmc')
 export class CoinMarketCapScraperController {
-  constructor(public service: CoinMarketCapScraperService) {}
+  constructor(private readonly service: CoinMarketCapScraperService) {}
 
   @Get('tokens')
   @HttpCode(200)
   async uniTokens(
     @Query()
-    {
-      networks: _networks,
-      search,
-      limit,
-      offset,
-      sortBy,
-      sortOrder,
-    }: QueryTokensDto
+    { networks, search, limit, offset, sortBy, sortOrder }: QueryTokensDto
   ) {
-    const networks = typeof _networks === 'string' ? [_networks] : _networks;
-    const tokens = (await this.service.tokens(networks)).filter((token) =>
+    const tokens = await this.service.tokens(networks);
+
+    const filteredTokens = tokens.filter((token) =>
       search
         ? [
             // token.id.toLowerCase(),
@@ -57,8 +51,9 @@ export class CoinMarketCapScraperController {
           ].find((_) => _.includes(search.toLowerCase()))
         : true
     );
+
     return {
-      tokens: tokens
+      tokens: filteredTokens
         .sort((a, b) =>
           sortOrder === TokensSortOrder.asc
             ? String(a[sortBy]).localeCompare(String(b[sortBy]), undefined, {
@@ -71,7 +66,7 @@ export class CoinMarketCapScraperController {
               })
         )
         .slice(Number(offset), Number(limit) + Number(offset)),
-      tokensCount: tokens.length,
+      tokensCount: filteredTokens.length,
     };
   }
 

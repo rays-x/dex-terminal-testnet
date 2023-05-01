@@ -1,7 +1,7 @@
 import { get, set } from 'lodash-es';
 import Redis from 'ioredis';
-import { InjectRedisClient } from 'nestjs-ioredis-tags';
 import md5 from 'md5';
+import { InjectRedis } from '@liaoliaots/nestjs-redis';
 import { REDIS_TAG } from '../../constants';
 import { getStatsLiquidity } from './helper';
 
@@ -10,9 +10,7 @@ export class CovalentService {
     [k: string]: boolean;
   } = {};
 
-  constructor(
-    @InjectRedisClient(REDIS_TAG) private readonly redisClient: Redis
-  ) {}
+  constructor(@InjectRedis(REDIS_TAG) private readonly redisClient: Redis) {}
 
   async statsLiquidity(
     btcAddress?: string,

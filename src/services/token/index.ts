@@ -1,19 +1,18 @@
 import { chunk, get, set, take } from 'lodash-es';
 import Redis from 'ioredis';
-import { InjectRedisClient } from 'nestjs-ioredis-tags';
-import got from 'got';
 import {
   HttpException,
   HttpStatus,
   Inject,
   OnModuleInit,
 } from '@nestjs/common';
-import { OptionsOfJSONResponseBody } from 'got/dist/source/types';
 import Typegoose from '@typegoose/typegoose';
 import { InjectModel } from 'nestjs-typegoose';
 import { addDays, differenceInDays, format } from 'date-fns';
 import { Types } from 'mongoose';
 import md5 from 'md5';
+import { proxyRequest } from 'helpers/proxyRequest';
+import { InjectRedis } from '@liaoliaots/nestjs-redis';
 import { awaiter, promiseMap } from '../../utils';
 import {
   CMC_ID_USD_COIN,
@@ -131,7 +130,7 @@ export class TokenService implements OnModuleInit {
   };
 
   constructor(
-    @InjectRedisClient(REDIS_TAG) private readonly redisClient: Redis,
+    @InjectRedis(REDIS_TAG) private readonly redisClient: Redis,
     @InjectModel(TokenEntity)
     private readonly repoToken: Typegoose.ReturnModelType<typeof TokenEntity>,
     @InjectModel(TokenTagEntity)
@@ -160,15 +159,15 @@ export class TokenService implements OnModuleInit {
   async onModuleInit() {
     promiseMap(
       [
-        this.syncTokens,
-        this.syncTokensHistory,
-        this.syncPlatforms,
-        this.syncDexs,
-        this.syncPairs,
-        this.syncTokenTransfers,
-        this.syncTokenSwaps,
-        this.syncTokenHolders,
-        this.syncTradersVolume,
+        // this.syncTokens,
+        // this.syncTokensHistory,
+        // this.syncPlatforms,
+        // this.syncDexs,
+        // this.syncPairs,
+        // this.syncTokenTransfers,
+        // this.syncTokenSwaps,
+        // this.syncTokenHolders,
+        // this.syncTradersVolume,
       ],
       async (start) => {
         try {
@@ -718,7 +717,7 @@ export class TokenService implements OnModuleInit {
         take(pairs, 10).map(async ({ id, cmc, platform, reverseOrder }) => {
           const {
             data: { transactions },
-          } = await this.proxyRequest<TransactionsResponse>({
+          } = await proxyRequest<TransactionsResponse>({
             headers: {
               'user-agent': CMC_USER_AGENT,
               'accept-encoding': 'gzip, deflate, br',
@@ -736,57 +735,9 @@ export class TokenService implements OnModuleInit {
     );
   }
 
-  private async proxyRequest<T>(
-    {
-      url = undefined,
-      pathname = undefined,
-      searchParams = undefined,
-      ...rest
-    }: OptionsOfJSONResponseBody,
-    forcedUrl: string = undefined
-  ) {
-    try {
-      return await got.get<T>(forcedUrl, {
-        url,
-        pathname,
-        searchParams,
-        ...rest,
-        resolveBodyOnly: true,
-      });
-    } catch (e) {
-      Logger.debug(
-        `mirror request ${get(e, 'message', e)} ${{
-          url: forcedUrl || url,
-          pathname,
-          searchParams,
-        }}`
-      );
-      /* const uri = `${_url || url}${pathname || ''}${qs.stringify(searchParams || {}, {
-        addQueryPrefix: true
-      })}`;
-      const encodeUri = encodeURIComponent(uri);
-      return got.get<T>(`https://translate.yandex.ru/translate?url=${encodeUri}`, {
-        ...rest,
-        followRedirect: true,
-        resolveBodyOnly: true
-      }); */
-      const { host } = new URL(forcedUrl || url.toString());
-
-      const hostReplaced = `${host.replace(/\./g, '-')}.translate.goog`;
-
-      return got.get<T>(forcedUrl && forcedUrl.replace(host, hostReplaced), {
-        url: url && forcedUrl.replace(host, hostReplaced),
-        pathname,
-        searchParams,
-        ...rest,
-        resolveBodyOnly: true,
-      });
-    }
-  }
-
   private async getCmcTokens(self: TokenService): Promise<string[]> {
     await awaiter(self.awaitTime);
-    const { fields, values } = await self.proxyRequest<{
+    const { fields, values } = await proxyRequest<{
       fields: string[];
       values: any[][];
     }>(
@@ -804,7 +755,7 @@ export class TokenService implements OnModuleInit {
     slug: string
   ): Promise<TokenCMCTokenInfoResponse> {
     await awaiter(self.awaitTime);
-    const body = await self.proxyRequest<string>(
+    const body = await proxyRequest<string>(
       {
         headers: {
           'user-agent': CMC_USER_AGENT,
@@ -824,7 +775,7 @@ export class TokenService implements OnModuleInit {
     self: TokenService
   ): Promise<TokenCMCPlatformsResponse['data']> {
     await awaiter(self.awaitTime);
-    const body = await self.proxyRequest<TokenCMCPlatformsResponse>(
+    const body = await proxyRequest<TokenCMCPlatformsResponse>(
       {
         headers: {
           'user-agent': CMC_USER_AGENT,
@@ -1128,23 +1079,22 @@ export class TokenService implements OnModuleInit {
         ];
         for (let i = 1; i < 6; i++) {
           try {
-            const data =
-              await self.proxyRequest<CoinMarketCapHistoricalResponse>(
-                {
-                  searchParams: {
-                    id: token.cmc,
-                    convertId: CMC_ID_USD_COIN,
-                    timeStart,
-                    timeEnd,
-                  },
-                  headers: {
-                    'user-agent': CMC_USER_AGENT,
-                    'accept-encoding': 'gzip, deflate, br',
-                  },
-                  responseType: 'json',
+            const data = await proxyRequest<CoinMarketCapHistoricalResponse>(
+              {
+                searchParams: {
+                  id: token.cmc,
+                  convertId: CMC_ID_USD_COIN,
+                  timeStart,
+                  timeEnd,
                 },
-                `https://api.coinmarketcap.com/data-api/v3/cryptocurrency/historical`
-              );
+                headers: {
+                  'user-agent': CMC_USER_AGENT,
+                  'accept-encoding': 'gzip, deflate, br',
+                },
+                responseType: 'json',
+              },
+              `https://api.coinmarketcap.com/data-api/v3/cryptocurrency/historical`
+            );
             await Promise.all(
               get(data, 'data.quotes', []).map(async (quote) => {
                 const date = new Date(
@@ -1227,7 +1177,7 @@ export class TokenService implements OnModuleInit {
       })
       .select('cmc');
     await promiseMap<PlatformEntity>(platforms, async (platform) => {
-      const data = await self.proxyRequest<TokenCMCPlatformDexsResponse>(
+      const data = await proxyRequest<TokenCMCPlatformDexsResponse>(
         {
           headers: {
             'user-agent': CMC_USER_AGENT,
@@ -1326,7 +1276,7 @@ export class TokenService implements OnModuleInit {
       let pairList: CmcPairListResponse['data'] = [];
       const makeRequest = async (): Promise<boolean> => {
         await awaiter(self.awaitTime);
-        const { data } = await self.proxyRequest<CmcPairListResponse>(
+        const { data } = await proxyRequest<CmcPairListResponse>(
           {
             headers: {
               'user-agent': CMC_USER_AGENT,
@@ -2027,7 +1977,7 @@ export class TokenService implements OnModuleInit {
             try {
               const dates = await self.repoTokenHistory
                 .find({
-                  token: token.id,
+                  token: token?.id,
                   holders: {
                     $exists: false,
                   },

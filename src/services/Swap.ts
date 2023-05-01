@@ -1,7 +1,7 @@
 import Redis from 'ioredis';
-import { InjectRedisClient } from 'nestjs-ioredis-tags';
 import Typegoose from '@typegoose/typegoose';
 import { InjectModel } from 'nestjs-typegoose';
+import { InjectRedis } from '@liaoliaots/nestjs-redis';
 import { REDIS_TAG, TOKEN_CHAIN_IDS } from '../constants';
 import TokenEntity, {
   TokenEntityDefaultPopulate,
@@ -52,7 +52,7 @@ export class SwapService {
   };
 
   constructor(
-    @InjectRedisClient(REDIS_TAG) private readonly redisClient: Redis,
+    @InjectRedis(REDIS_TAG) private readonly redisClient: Redis,
     @InjectModel(TokenEntity)
     private readonly repoToken: Typegoose.ReturnModelType<typeof TokenEntity>
   ) {}
