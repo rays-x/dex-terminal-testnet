@@ -2,7 +2,7 @@ import pAll from 'p-all';
 import pThrottle from 'p-throttle';
 
 import { req } from 'helpers/proxyRequest';
-import { chunk, merge } from 'lodash-es';
+import { chunk } from 'lodash-es';
 import {
   CPCCoinsResponse,
   CmcStats,
@@ -11,6 +11,7 @@ import {
   CmcCoin,
   CmcCoinWithStats,
   CmcUniswapTokensResponse,
+  HasValidCmcQuote,
 } from './types';
 
 const CMC_API_KEY = '9365749c-5395-452c-9ab7-c87ceccb64eb';
@@ -98,7 +99,20 @@ export async function getCmcStats(
     chunk(ids, CMC_IDS_PER_REQ).map(throttled)
   );
 
-  return merge(responses);
+  return responses.reduce((m, res) => ({ ...m, ...res }), {});
+}
+
+export function isValidStats(
+  cmcTokenStats: CmcStats
+): cmcTokenStats is HasValidCmcQuote {
+  return ![
+    cmcTokenStats.quote.USD.volume_24h,
+    cmcTokenStats.quote.USD.volume_change_24h,
+    cmcTokenStats.circulating_supply,
+    cmcTokenStats.quote.USD.price,
+    cmcTokenStats.quote.USD.percent_change_1h,
+    cmcTokenStats.quote.USD.percent_change_24h,
+  ].some((v) => !v);
 }
 
 export function statsToTokenInfo(

@@ -21,6 +21,7 @@ import {
   getCmcTokens,
   getPancakeswapTokenContracts,
   getUniswapTokenContracts,
+  isValidStats,
   statsToTokenInfo,
 } from './helpers';
 
@@ -297,7 +298,11 @@ export class CoinMarketCapScraperService {
     const cache = await this.redisClient.get(cacheKey);
 
     if (cache) {
-      return JSON.parse(cache);
+      const parsed = JSON.parse(cache);
+
+      if (Object.keys(parsed).length) {
+        return parsed;
+      }
     }
 
     Logger.debug(`waiting for: ${cacheKey}...`);
@@ -316,7 +321,9 @@ export class CoinMarketCapScraperService {
 
     const uniTokensWithStats = Object.fromEntries<CmcCoinWithStats>(
       uniTokens
-        .filter(([id]) => !!cmcTokenStats[id])
+        .filter(
+          ([id]) => !!cmcTokenStats[id] && isValidStats(cmcTokenStats[id])
+        )
         .map(([id, tokenInfo]) => [
           id,
           statsToTokenInfo(tokenInfo, cmcTokenStats[id]),

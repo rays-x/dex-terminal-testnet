@@ -87,12 +87,12 @@ export interface CmcStats {
   name: string;
   symbol: string;
   slug: string;
-  num_market_pairs: number;
+  num_market_pairs: number | null;
   date_added: string;
   tags: string[];
-  max_supply: any;
-  circulating_supply: number;
-  total_supply: number;
+  max_supply: unknown;
+  circulating_supply: number | null;
+  total_supply: number | null;
   platform: {
     id: number;
     name: string;
@@ -102,12 +102,33 @@ export interface CmcStats {
   };
   is_active: number;
   infinite_supply: boolean;
-  cmc_rank: number;
+  cmc_rank: number | null;
   is_fiat: number;
   self_reported_circulating_supply: number | null;
   self_reported_market_cap: number | null;
-  tvl_ratio: any;
+  tvl_ratio: unknown;
   last_updated: string;
+  quote: {
+    USD: {
+      price: number;
+      volume_24h: number | null;
+      volume_change_24h: number | null;
+      percent_change_1h: number | null;
+      percent_change_24h: number | null;
+      percent_change_7d: number | null;
+      percent_change_30d: number | null;
+      percent_change_60d: number | null;
+      percent_change_90d: number | null;
+      market_cap: number | null;
+      market_cap_dominance: number | null;
+      fully_diluted_market_cap: number;
+      tvl: unknown;
+      last_updated: string;
+    };
+  };
+}
+
+export interface HasValidCmcQuote extends CmcStats {
   quote: {
     USD: {
       price: number;
@@ -122,7 +143,7 @@ export interface CmcStats {
       market_cap: number;
       market_cap_dominance: number;
       fully_diluted_market_cap: number;
-      tvl: any;
+      tvl: unknown;
       last_updated: string;
     };
   };
