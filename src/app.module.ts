@@ -1,6 +1,6 @@
 import { Module, NestModule, OnApplicationShutdown } from '@nestjs/common';
 import { TypegooseModule } from 'nestjs-typegoose';
-import { RedisModule } from 'nestjs-ioredis-tags';
+import { RedisModule } from '@liaoliaots/nestjs-redis';
 import { ScheduleModule } from '@nestjs/schedule';
 import { MailchimpModule } from '@mindik/mailchimp-nestjs';
 import { AwsSdkModule } from 'nest-aws-sdk';
@@ -15,14 +15,15 @@ import { Logger } from './config/logger/api-logger';
   imports: [
     TypegooseModule.forRoot(`${MONGO_URI}`, MONGO_CONFIG),
     MailchimpModule.forRoot(`${process.env.MAILCHIMP_TRANSACTIONAL_API_KEY}`),
-    RedisModule.forRoot([
-      {
-        name: REDIS_TAG,
+    RedisModule.forRoot({
+      readyLog: true,
+      config: {
+        namespace: REDIS_TAG,
         host: process.env.REDIS_HOST || 'localhost',
         port: Number.parseInt(process.env.REDIS_PORT || '6379', 10),
         password: process.env.REDIS_PASSWORD,
       },
-    ]),
+    }),
     AwsSdkModule.forRoot({
       defaultServiceOptions: {
         endpoint: process.env.S3_ENDPOINT,

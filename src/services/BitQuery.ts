@@ -1,9 +1,9 @@
 import { get, set } from 'lodash-es';
 import Redis from 'ioredis';
-import { InjectRedisClient } from 'nestjs-ioredis-tags';
 import got from 'got';
 import md5 from 'md5';
 import { addDays, format } from 'date-fns';
+import { InjectRedis } from '@liaoliaots/nestjs-redis';
 import {
   BitQueryStatsTransfersNewQuery,
   BitQueryStatsTransfersQuery,
@@ -54,9 +54,7 @@ export class BitQueryService {
 
   token: string;
 
-  constructor(
-    @InjectRedisClient(REDIS_TAG) private readonly redisClient: Redis
-  ) {
+  constructor(@InjectRedis(REDIS_TAG) private readonly redisClient: Redis) {
     this.cookie =
       '_explorer_session=4yYmFNlXf5q5TDjTin4xPrXyePxBUkQEK%2B%2FdYf7BXatzbczijLoPeXsYnXmoZznqbF5lR%2BGShh61QnrqjCAtHkhQF2HUa8g9xTIP%2B1WEaUWjR9Ji1kUW48QKL86BCTuJBzozLcjksPexQqYQN9PymBHWVBzh%2FDkDfeXSn%2F5tsTJ6DZ5AYenUDcHRwpzCPzrs38j88O%2FX0cE3krIKfwMKVNpgv5bYqwE5fV5AzhlFdrI0tltWONK7nZLJaAxXtLxQ%2BdGTHttvpUNOp%2FrrlfV5MOWWPgWV7oQ06gudbs5fG79dz9nXthlWIETNNO6FB9FoAvkGHOxziE0ZdK1eeP0le%2F8%3D--XHqGDaPmOgSBQ%2F2a--HwvPr1erEbmpJu%2FS%2F2RGgw%3D%3D';
     this.token =

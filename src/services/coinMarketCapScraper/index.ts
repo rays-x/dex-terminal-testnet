@@ -1,12 +1,10 @@
-import { get } from 'lodash-es';
+import { get, uniqBy } from 'lodash-es';
 import Redis from 'ioredis';
-import { InjectRedisClient } from 'nestjs-ioredis-tags';
-import got from 'got';
-import { Inject } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import md5 from 'md5';
-import { OptionsOfJSONResponseBody } from 'got/dist/source/types';
+import { proxyRequest } from 'helpers/proxyRequest';
+import { InjectRedis } from '@liaoliaots/nestjs-redis';
 import { Logger } from '../../config/logger/api-logger';
-import { awaiter } from '../../utils';
 import { Network, TransactionsResponse } from '../../dto/coinMarketCapScraper';
 import { CmcPairListResponse } from '../../types';
 import {
@@ -15,92 +13,66 @@ import {
   CMC_USER_AGENT,
   REDIS_TAG,
 } from '../../constants';
-import { BitQueryService } from '../BitQuery';
-import { CovalentService } from '../covalent';
-import { CmcToken, UniToken } from './types';
+import { CmcCoinWithStats, CmcCoins, CmcToken } from './types';
+import {
+  getCmcStats,
+  getCmcTokens,
+  getPancakeswapTokenContracts,
+  getUniswapTokenContracts,
+  isValidStats,
+  statsToTokenInfo,
+} from './helpers';
 
-const DEFAULT_AWAIT_TIME: number = 0.65 * 1000;
+const TOKEN_INFO_CACHE_TTL = 24 * 60 * 60 * 1000;
+const PANCAKESWAP_CACHE_KEY = 'cmc:getPancakeswapTokens';
+const UNISWAP_CACHE_KEY = 'cmc:getUniswapTokens';
 
+@Injectable()
 export class CoinMarketCapScraperService {
   awaiterPairsList: {
     [k: string]: boolean;
   } = {};
 
-  awaitTime: number = DEFAULT_AWAIT_TIME;
+  constructor(@InjectRedis(REDIS_TAG) private readonly redisClient: Redis) {}
 
-  uniTokens: {
-    [k: string]: {
-      address: string;
-      slug: string;
-    };
-  } = {};
-
-  panTokens: {
-    [k: string]: {
-      address: string;
-      slug: string;
-    };
-  } = {};
-
-  constructor(
-    @InjectRedisClient(REDIS_TAG) private readonly redisClient: Redis,
-    @Inject(BitQueryService) private readonly bitQueryService: BitQueryService,
-    @Inject(CovalentService) private readonly covalentService: CovalentService
-  ) {}
+  public async onModuleInit(): Promise<void> {
+    try {
+      await this.tokens();
+    } catch (e) {
+      Logger.error(e?.message || e);
+    }
+  }
 
   async tokens(
     networks: Network[] = [Network.bsc, Network.eth]
   ): Promise<CmcToken[]> {
-    const tokens = networks.reduce((_tokens, network) => {
-      switch (network) {
-        case Network.bsc: {
-          return [..._tokens, ...Object.values(this.panTokens)];
-        }
-        case Network.eth: {
-          return [..._tokens, ...Object.values(this.uniTokens)];
-        }
-        default:
-          throw new Error('Invalid network type');
-      }
-    }, []);
+    const panTokens = networks.includes(Network.bsc)
+      ? await this.getFilteredTokens(
+          PANCAKESWAP_CACHE_KEY,
+          getPancakeswapTokenContracts
+        )
+      : {};
 
-    return (
-      await Promise.all(
-        tokens.map(async (token) => {
-          const data = JSON.parse(
-            (await this.redisClient.get(`cmc:ait:${token.slug}`)) || 'null'
-          );
+    const uniTokens = networks.includes(Network.eth)
+      ? await this.getFilteredTokens(
+          UNISWAP_CACHE_KEY,
+          getUniswapTokenContracts
+        )
+      : {};
 
-          return !data || data.status !== 'active'
-            ? null
-            : {
-                id: data.id,
-                slug: token.slug,
-                name: data.name,
-                symbol: data.symbol,
-                logoURI: `https://s2.coinmarketcap.com/static/img/coins/64x64/${data.id}.png`,
-                liquidity: data.statistics.fullyDilutedMarketCap,
-                volume: data.volume,
-                volumeChangePercentage24h: data.volumeChangePercentage24h,
-                circulatingSupply:
-                  Number(data.statistics.circulatingSupply) ||
-                  Number(data.selfReportedCirculatingSupply || 0),
-                marketCap: data.statistics.marketCap,
-                price: data.statistics.price,
-                priceChangePercentage1h:
-                  data.statistics.priceChangePercentage1h,
-                priceChangePercentage24h:
-                  data.statistics.priceChangePercentage24h,
-                cmcId: data.id,
-              };
-        })
-      )
-    ).reduce((prev, item) => {
-      if (!item || prev.findIndex(({ cmcId }) => item?.cmcId === cmcId) > -1) {
-        return prev;
-      }
-      return [...prev, item];
-    }, []);
+    return uniqBy(
+      [...Object.entries(panTokens), ...Object.entries(uniTokens)],
+      0
+    ).map(([id, tokenInfo]) => ({
+      ...tokenInfo,
+      id,
+      cmcId: Number.parseInt(id, 10),
+      logoURI: `https://s2.coinmarketcap.com/static/img/coins/64x64/${id}.png`,
+      volume: Number.parseFloat(tokenInfo.volume),
+      circulatingSupply: Number.parseFloat(tokenInfo.circulatingSupply),
+      marketCap: Number.parseFloat(tokenInfo.marketCap),
+      price: Number.parseFloat(tokenInfo.price),
+    }));
   }
 
   async pairsInfo(
@@ -120,7 +92,7 @@ export class CoinMarketCapScraperService {
 
     await Promise.all(
       pairs.map(async (pair) => {
-        const body = await this.proxyRequest(
+        const body = await proxyRequest(
           {
             headers: {
               'user-agent': CMC_USER_AGENT,
@@ -176,7 +148,7 @@ export class CoinMarketCapScraperService {
         params,
         prev: CmcPairListResponse['data']
       ): Promise<CmcPairListResponse['data']> => {
-        const { data } = await this.proxyRequest<CmcPairListResponse>(
+        const { data } = await proxyRequest<CmcPairListResponse>(
           {
             headers: {
               'user-agent': CMC_USER_AGENT,
@@ -218,7 +190,7 @@ export class CoinMarketCapScraperService {
           cacheKey,
           JSON.stringify(result),
           'PX',
-          30 * 24 * 60 * 60 * 1000
+          TOKEN_INFO_CACHE_TTL
         );
       }
 
@@ -251,7 +223,7 @@ export class CoinMarketCapScraperService {
           const [pairId, reversOrder, from] = String(params).split('_');
           const {
             data: { transactions },
-          } = await this.proxyRequest<TransactionsResponse>({
+          } = await proxyRequest<TransactionsResponse>({
             headers: {
               'user-agent': CMC_USER_AGENT,
               'accept-encoding': 'gzip, deflate, br',
@@ -305,199 +277,54 @@ export class CoinMarketCapScraperService {
           .sort((a, b) => Number(b.time) - Number(a.time));
   }
 
-  private async proxyRequest<T>(
-    {
-      url = undefined,
-      pathname = undefined,
-      searchParams = undefined,
-      ...rest
-    }: OptionsOfJSONResponseBody,
-    forcedUrl: string = undefined
-  ) {
-    try {
-      return await got.get<T>(forcedUrl, {
-        url,
-        pathname,
-        searchParams,
-        ...rest,
-        resolveBodyOnly: true,
-      });
-    } catch (e) {
-      Logger.debug(
-        `mirror request ${get(e, 'message', e)} ${{
-          url: forcedUrl || url,
-          pathname,
-          searchParams,
-        }}`
-      );
-      /* const uri = `${_url || url}${pathname || ''}${qs.stringify(searchParams || {}, {
-        addQueryPrefix: true
-      })}`;
-      const encodeUri = encodeURIComponent(uri);
-      return got.get<T>(`https://translate.yandex.ru/translate?url=${encodeUri}`, {
-        ...rest,
-        followRedirect: true,
-        resolveBodyOnly: true
-      }); */
-      const { host } = new URL(forcedUrl || url.toString());
-      const hostReplaced = `${host.replace(/\./g, '-')}.translate.goog`;
+  private async getFilteredTokens(
+    cacheKey: string,
+    allowedContractsMethod: () => Promise<string[]>
+  ): Promise<CmcCoins> {
+    const cache = await this.redisClient.get(cacheKey);
 
-      return got.get<T>(forcedUrl && forcedUrl.replace(host, hostReplaced), {
-        url: url && forcedUrl.replace(host, hostReplaced),
-        pathname,
-        searchParams,
-        ...rest,
-        resolveBodyOnly: true,
-      });
-    }
-  }
-
-  private async getUniTokens(): Promise<typeof this.uniTokens> {
-    const cacheKey = 'cmc:getUniswapTokens';
-    const cache = JSON.parse((await this.redisClient.get(cacheKey)) || 'null');
     if (cache) {
-      this.uniTokens = cache;
-      return cache;
+      const parsed = JSON.parse(cache);
+
+      if (Object.keys(parsed).length) {
+        return parsed;
+      }
     }
+
     Logger.debug(`waiting for: ${cacheKey}...`);
-    const { fields, values } = await this.proxyRequest<{
-      fields: string[];
-      values: any[][];
-    }>(
-      { responseType: 'json' },
-      'https://s3.coinmarketcap.com/generated/core/crypto/cryptos.json'
+
+    const allowedContracts = await allowedContractsMethod();
+
+    const uniTokenContractsSet = new Set(
+      allowedContracts.map((contract) => contract.toLowerCase())
     );
-    const slugIndex = fields.indexOf('slug');
-    const addressIndex = fields.indexOf('address');
-    const slugs: {
-      [k: string]: string[];
-    } = Object.fromEntries(
-      values
-        .filter((_) => _[addressIndex].length)
-        .map((item) => [
-          item[slugIndex],
-          item[addressIndex].map((_) => _.toLowerCase()),
+
+    const cmcTokens = await getCmcTokens();
+
+    const uniTokens = cmcTokens.filter(([, slug]) =>
+      slug.contracts.some((contract) => uniTokenContractsSet.has(contract))
+    );
+
+    const cmcTokenStats = await getCmcStats(uniTokens.map(([id]) => id));
+
+    const uniTokensWithStats = Object.fromEntries<CmcCoinWithStats>(
+      uniTokens
+        .filter(
+          ([id]) => !!cmcTokenStats[id] && isValidStats(cmcTokenStats[id])
+        )
+        .map(([id, tokenInfo]) => [
+          id,
+          statsToTokenInfo(tokenInfo, cmcTokenStats[id]),
         ])
     );
-    const { tokens } = await this.proxyRequest<{
-      tokens: Omit<UniToken, 'slug'>[];
-    }>(
-      { responseType: 'json' },
-      'https://api.coinmarketcap.com/data-api/v3/uniswap/all.json'
-    );
-    this.uniTokens = Object.fromEntries(
-      tokens.reduce((prev, { address = '' }) => {
-        const slug = Object.entries(slugs)
-          .find(([, addresses]) =>
-            addresses.find((_) => _.includes(address.toLowerCase()))
-          )
-          ?.shift();
 
-        const mappedSlug = slug === 'weth' ? 'ethereum' : slug;
-
-        return mappedSlug
-          ? [
-              ...prev,
-              [
-                mappedSlug,
-                {
-                  address,
-                  slug: mappedSlug,
-                },
-              ],
-            ]
-          : prev;
-      }, [])
-    );
     await this.redisClient.set(
       cacheKey,
-      JSON.stringify(this.uniTokens),
+      JSON.stringify(uniTokensWithStats),
       'PX',
       24 * 60 * 60 * 1000
     );
-    return this.uniTokens;
-  }
 
-  private async getPanTokens(): Promise<typeof this.panTokens> {
-    const cacheKey = 'cmc:getPancakeswapTokens';
-    const cache = JSON.parse((await this.redisClient.get(cacheKey)) || 'null');
-    if (cache) {
-      this.panTokens = cache;
-      return cache;
-    }
-    Logger.debug(`waiting for: ${cacheKey}...`);
-    const { fields, values } = await this.proxyRequest<{
-      fields: string[];
-      values: any[][];
-    }>(
-      { responseType: 'json' },
-      'https://s3.coinmarketcap.com/generated/core/crypto/cryptos.json'
-    );
-    const slugIndex = fields.indexOf('slug');
-    const addressIndex = fields.indexOf('address');
-    const slugs: [string, string[]][] = values
-      .filter((_) => _[addressIndex].length)
-      .map((item) => [
-        item[slugIndex],
-        item[addressIndex].map((_) => _.toLowerCase()).join(','),
-      ]);
-    const body = await got.get(
-      'https://api.covalenthq.com/v1/56/xy=k/pancakeswap_v2/tokens/',
-      {
-        searchParams: {
-          key: 'ckey_65c7c5729a7141889c2cdea0556',
-          'page-size': 50000,
-        },
-        resolveBodyOnly: true,
-      }
-    );
-    const items = body
-      .match(/"0x.{40}",/gm)
-      ?.map((_) => _.substring(1, 42).toLowerCase());
-    this.panTokens = Object.fromEntries(
-      items.reduce((prev, address) => {
-        const slug = get(
-          slugs.find(([, addresses]) => addresses.includes(address)),
-          0
-        );
-        return slug
-          ? [
-              ...prev,
-              [
-                slug,
-                {
-                  address,
-                  slug,
-                },
-              ],
-            ]
-          : prev;
-      }, [])
-    );
-    await this.redisClient.set(
-      cacheKey,
-      JSON.stringify(this.panTokens),
-      'PX',
-      24 * 60 * 60 * 1000
-    );
-    return this.panTokens;
-  }
-
-  private async getTokenData(slug: string) {
-    await awaiter(this.awaitTime);
-    const body = await this.proxyRequest<string>(
-      {
-        headers: {
-          'user-agent': CMC_USER_AGENT,
-          'accept-encoding': 'gzip, deflate, br',
-        },
-      },
-      `https://coinmarketcap.com/currencies/${slug}/`
-    );
-    const regex = body.match(
-      /<script id="__NEXT_DATA__" type="application\/json">(?<jsonData>.+)<\/script>/m
-    );
-    const data = JSON.parse(get(regex, 'groups.jsonData', 'null') || 'null');
-    return get(data, 'props.pageProps.info');
+    return uniTokensWithStats;
   }
 }

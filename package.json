@@ -12,7 +12,7 @@
     "copyfiles": "copyfiles -u 1 src/**/*.{html,css,scss,ttf,woff,woff2,eot,svg,jpg,png,json,csv,yml} dist/",
     "pre:debug": "yarn copyfiles && yarn build:server",
     "prestart": "docker compose up -d",
-    "start": "dotenv ts-node --transpile-only --exit-child -- src/index.ts",
+    "start": "nodemon --watch './**/*.ts' --exec 'node --loader @bleed-believer/path-alias -r dotenv/config -r tsconfig-paths/register' src/index.ts",
     "build:payload": "dotenv payload build",
     "build:server": "tsc",
     "build": "rm -rf dist build && yarn copyfiles && yarn build:server",
@@ -25,6 +25,7 @@
     "lint": "eslint . --ext .ts"
   },
   "dependencies": {
+    "@liaoliaots/nestjs-redis": "^9.0.5",
     "@mailchimp/mailchimp_transactional": "1.0.48",
     "@mindik/mailchimp-nestjs": "1.1.5",
     "@nestjs/common": "9.1.4",
@@ -68,7 +69,7 @@
     "google-libphonenumber": "3.2.31",
     "got": "11.8.5",
     "image-extensions": "1.1.0",
-    "ioredis": "5.2.3",
+    "ioredis": "^5.3.2",
     "js-yaml": "^4.1.0",
     "jsonwebtoken": "8.5.1",
     "lodash-es": "4.17.21",
@@ -80,9 +81,10 @@
     "nest-aws-sdk": "^3.0.1",
     "nest-mqtt": "^0.2.0",
     "nestjs-asyncapi": "^0.3.5",
-    "nestjs-ioredis-tags": "0.1.8",
     "nestjs-typegoose": "7.1.38",
     "node-html-markdown": "^1.2.0",
+    "p-all": "^5.0.0",
+    "p-throttle": "^5.0.0",
     "passport": "0.6.0",
     "passport-facebook": "3.0.0",
     "passport-google-oauth20": "2.0.0",
@@ -90,7 +92,6 @@
     "payload": "1.1.5",
     "qs": "6.11.0",
     "react-responsive-embed": "2.1.0",
-    "redis": "4.3.1",
     "rxjs": "7.5.7",
     "slate": "^0.94.0",
     "slugify": "1.6.5",
@@ -99,6 +100,7 @@
     "uuid": "9.0.0"
   },
   "devDependencies": {
+    "@bleed-believer/path-alias": "^0.14.0",
     "@darraghor/eslint-plugin-nestjs-typed": "^3.20.5",
     "@types/connect-redis": "0.0.18",
     "@types/cookie-parser": "^1.4.3",
@@ -128,9 +130,10 @@
     "eslint-config-prettier": "^8.8.0",
     "eslint-plugin-import": "^2.27.5",
     "eslint-plugin-prettier": "^4.2.1",
+    "nodemon": "2.0.22",
     "prettier": "2.8.4",
     "ts-node": "10.9.1",
-    "ts-node-dev": "2.0.0",
+    "tsconfig-paths": "^4.2.0",
     "typescript": "5.0.4"
   },
   "resolutions": {

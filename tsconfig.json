@@ -21,13 +21,17 @@
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
     "types": ["node"],
-    "typeRoots": ["node_modules/@types", "declarations"]
+    "typeRoots": ["node_modules/@types", "declarations"],
+    "paths": {
+      "helpers/*": ["./helpers/*"]
+    }
   },
-  "include": ["src", "declarations", "./.eslintrc.cjs", "esm-wrappers"],
+  "include": ["src", "declarations", "./.eslintrc.cjs"],
   "exclude": ["dist", "build", "tests", "**/*.spec.js", "node_modules"],
   "ts-node": {
     "esm": true,
     "transpileOnly": true,
-    "experimentalSpecifierResolution": "node"
+    "experimentalSpecifierResolution": "node",
+    "require": ["tsconfig-paths/register"]
   }
 }
