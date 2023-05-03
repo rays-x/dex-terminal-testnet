@@ -17,6 +17,8 @@ import {
 const CMC_API_KEY = '9365749c-5395-452c-9ab7-c87ceccb64eb';
 const CMC_IDS_PER_REQ = 500;
 
+const COINGECKO_PAGES = 5;
+
 const throttle = pThrottle({
   limit: 1,
   interval: 2000,
@@ -49,7 +51,7 @@ export async function getCmcTokens(): Promise<[string, CmcCoin][]> {
 
 export async function getPancakeswapTokenContracts(): Promise<string[]> {
   const pages = await pAll(
-    [1].map(
+    Array.from({ length: COINGECKO_PAGES }, (_, i) => i + 1).map(
       (page) => async () =>
         req<CoinGeckoTokens>(
           'https://api.coingecko.com/api/v3/exchanges/pancakeswap_new/tickers',

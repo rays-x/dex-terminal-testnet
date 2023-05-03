@@ -1,6 +1,6 @@
 import { get, uniqBy } from 'lodash-es';
 import Redis from 'ioredis';
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import md5 from 'md5';
 import { proxyRequest } from 'helpers/proxyRequest';
 import { InjectRedis } from '@liaoliaots/nestjs-redis';
@@ -13,8 +13,6 @@ import {
   CMC_USER_AGENT,
   REDIS_TAG,
 } from '../../constants';
-import { BitQueryService } from '../BitQuery';
-import { CovalentService } from '../covalent';
 import { CmcCoinWithStats, CmcCoins, CmcToken } from './types';
 import {
   getCmcStats,
@@ -25,7 +23,9 @@ import {
   statsToTokenInfo,
 } from './helpers';
 
-const DEFAULT_AWAIT_TIME: number = 0.65 * 1000;
+const TOKEN_INFO_CACHE_TTL = 24 * 60 * 60 * 1000;
+const PANCAKESWAP_CACHE_KEY = 'cmc:getPancakeswapTokens';
+const UNISWAP_CACHE_KEY = 'cmc:getUniswapTokens';
 
 @Injectable()
 export class CoinMarketCapScraperService {
@@ -33,24 +33,18 @@ export class CoinMarketCapScraperService {
     [k: string]: boolean;
   } = {};
 
-  awaitTime: number = DEFAULT_AWAIT_TIME;
-
-  constructor(
-    @InjectRedis(REDIS_TAG) private readonly redisClient: Redis,
-    @Inject(BitQueryService) private readonly bitQueryService: BitQueryService,
-    @Inject(CovalentService) private readonly covalentService: CovalentService
-  ) {}
+  constructor(@InjectRedis(REDIS_TAG) private readonly redisClient: Redis) {}
 
   public async onModuleInit(): Promise<void> {
     try {
       await this.getFilteredTokens(
         await getPancakeswapTokenContracts(),
-        'cmc:getPancakeswapTokens'
+        PANCAKESWAP_CACHE_KEY
       );
 
       await this.getFilteredTokens(
         await getUniswapTokenContracts(),
-        'cmc:getUniswapTokens'
+        UNISWAP_CACHE_KEY
       );
     } catch (e) {
       Logger.error(e?.message || e);
@@ -63,14 +57,14 @@ export class CoinMarketCapScraperService {
     const panTokens = networks.includes(Network.bsc)
       ? await this.getFilteredTokens(
           await getPancakeswapTokenContracts(),
-          'cmc:getPancakeswapTokens'
+          PANCAKESWAP_CACHE_KEY
         )
       : {};
 
     const uniTokens = networks.includes(Network.eth)
       ? await this.getFilteredTokens(
           await getUniswapTokenContracts(),
-          'cmc:getUniswapTokens'
+          UNISWAP_CACHE_KEY
         )
       : {};
 
@@ -204,7 +198,7 @@ export class CoinMarketCapScraperService {
           cacheKey,
           JSON.stringify(result),
           'PX',
-          30 * 24 * 60 * 60 * 1000
+          TOKEN_INFO_CACHE_TTL
         );
       }
 
