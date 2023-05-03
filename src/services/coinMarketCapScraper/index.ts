@@ -37,15 +37,7 @@ export class CoinMarketCapScraperService {
 
   public async onModuleInit(): Promise<void> {
     try {
-      await this.getFilteredTokens(
-        await getPancakeswapTokenContracts(),
-        PANCAKESWAP_CACHE_KEY
-      );
-
-      await this.getFilteredTokens(
-        await getUniswapTokenContracts(),
-        UNISWAP_CACHE_KEY
-      );
+      await this.tokens();
     } catch (e) {
       Logger.error(e?.message || e);
     }
@@ -56,15 +48,15 @@ export class CoinMarketCapScraperService {
   ): Promise<CmcToken[]> {
     const panTokens = networks.includes(Network.bsc)
       ? await this.getFilteredTokens(
-          await getPancakeswapTokenContracts(),
-          PANCAKESWAP_CACHE_KEY
+          PANCAKESWAP_CACHE_KEY,
+          getPancakeswapTokenContracts
         )
       : {};
 
     const uniTokens = networks.includes(Network.eth)
       ? await this.getFilteredTokens(
-          await getUniswapTokenContracts(),
-          UNISWAP_CACHE_KEY
+          UNISWAP_CACHE_KEY,
+          getUniswapTokenContracts
         )
       : {};
 
@@ -286,8 +278,8 @@ export class CoinMarketCapScraperService {
   }
 
   private async getFilteredTokens(
-    allowedContracts: string[],
-    cacheKey: string
+    cacheKey: string,
+    allowedContractsMethod: () => Promise<string[]>
   ): Promise<CmcCoins> {
     const cache = await this.redisClient.get(cacheKey);
 
@@ -300,6 +292,8 @@ export class CoinMarketCapScraperService {
     }
 
     Logger.debug(`waiting for: ${cacheKey}...`);
+
+    const allowedContracts = await allowedContractsMethod();
 
     const uniTokenContractsSet = new Set(
       allowedContracts.map((contract) => contract.toLowerCase())
