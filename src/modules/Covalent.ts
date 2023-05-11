@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { CovalentService } from '../services/covalent';
+import { CovalentService } from 'services/covalent';
 import { CovalentController } from '../controllers/Covalent';
 
 @Module({

@@ -1,0 +1,106 @@
+generator client {
+    provider = "prisma-client-js"
+    output   = "./generated/client"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("POSTGRES_URL")
+}
+
+model Token {
+    id                                       Int                     @id @default(autoincrement())
+    cmc_slug                                 String                  @unique
+    cmc_id                                   Int                     @unique
+    cmc_added_date                           DateTime
+    launched_date                            DateTime
+    name                                     String
+    symbol                                   String
+    category                                 String
+    description                              String
+    price                                    String
+    price_change_perc_1h                     Float?
+    price_change_perc_24h                    Float?
+    price_change_perc_7d                     Float?
+    market_cap                               String?
+    market_cap_change_perc_24h               Float?
+    fully_diluted_market_cap                 String?
+    fully_diluted_market_cap_change_perc_24h Float?
+    self_reported_circulating_supply         String?
+    circulating_supply                       String?
+    total_supply                             String?
+    volume                                   String?
+    volume_change_perc_24h                   Float?
+    BaseExchangePairs                        ExchangePair[]          @relation(name: "base_token")
+    QuoteExchangePairs                       ExchangePair[]          @relation(name: "quote_token")
+    TokenBlockchainRecords                   TokenBlockchainRecord[]
+    OwnedBlockchain                          Blockchain?
+
+    @@index([cmc_id])
+    @@index([cmc_slug])
+}
+
+model Blockchain {
+    id                        Int                     @id @default(autoincrement())
+    cmc_id                    Int                     @unique
+    name                      String
+    evm_chain_id              Int?
+    parent_token_cmc_id       Int                     @unique
+    explorer_tx_url_format    String?
+    explorer_addr_url_format  String?
+    explorer_token_url_format String?
+    Tokens                    TokenBlockchainRecord[]
+    ParentToken               Token                   @relation(fields: [parent_token_cmc_id], references: [cmc_id])
+    Exchanges                 Exchange[]
+
+    @@index([cmc_id])
+}
+
+model TokenBlockchainRecord {
+    address           String
+    token_id          Int
+    blockchain_cmc_id Int
+    Token             Token      @relation(fields: [token_id], references: [id], onDelete: Cascade)
+    Blockchain        Blockchain @relation(fields: [blockchain_cmc_id], references: [cmc_id], onDelete: Cascade)
+
+    @@id([blockchain_cmc_id, address])
+}
+
+model ExchangePair {
+    volume             String
+    price              String
+    category           String
+    base_token_cmc_id  Int
+    quote_token_cmc_id Int
+    exchange_cmc_id    Int
+    BaseToken          Token    @relation(name: "base_token", fields: [base_token_cmc_id], references: [cmc_id], onDelete: Cascade)
+    QuoteToken         Token    @relation(name: "quote_token", fields: [quote_token_cmc_id], references: [cmc_id], onDelete: Cascade)
+    Exchange           Exchange @relation(fields: [exchange_cmc_id], references: [cmc_id])
+
+    @@id([base_token_cmc_id, quote_token_cmc_id, exchange_cmc_id])
+    @@index([base_token_cmc_id])
+    @@index([quote_token_cmc_id])
+    @@index([exchange_cmc_id])
+}
+
+enum ExchangeType {
+    DEX
+    CEX
+}
+
+model Exchange {
+    id              Int            @id @default(autoincrement())
+    name            String
+    cmc_id          Int            @unique
+    txs_24h         Int
+    liquidity_score Float?
+    exchange_score  Float?
+    volume_1h       String
+    volume_24h      String
+    blockchain_id   Int
+    Type            ExchangeType
+    ExchangePair    ExchangePair[]
+    Blockchain      Blockchain     @relation(fields: [blockchain_id], references: [id], onDelete: Cascade)
+
+    @@index([cmc_id])
+}

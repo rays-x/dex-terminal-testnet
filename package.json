@@ -12,7 +12,7 @@
     "copyfiles": "copyfiles -u 1 src/**/*.{html,css,scss,ttf,woff,woff2,eot,svg,jpg,png,json,csv,yml} dist/",
     "pre:debug": "yarn copyfiles && yarn build:server",
     "prestart": "docker compose up -d",
-    "start": "nodemon --watch './**/*.ts' --exec 'node --loader @bleed-believer/path-alias -r dotenv/config -r tsconfig-paths/register' src/index.ts",
+    "start": "nodemon --watch './src/**/*.ts' --ignore './prisma/**/*' --exec 'node --loader @bleed-believer/path-alias -r dotenv/config -r tsconfig-paths/register' src/index.ts",
     "build:payload": "dotenv payload build",
     "build:server": "tsc",
     "build": "rm -rf dist build && yarn copyfiles && yarn build:server",
@@ -38,6 +38,7 @@
     "@payloadcms/plugin-form-builder": "1.0.7",
     "@payloadcms/plugin-nested-docs": "1.0.3",
     "@payloadcms/plugin-seo": "1.0.8",
+    "@prisma/client": "4.13.0",
     "@stigma.io/nestjs-oraq": "^0.2.5",
     "bcrypt": "5.0.1",
     "body-parser": "^1.20.1",
@@ -62,6 +63,7 @@
     "p-all": "^5.0.0",
     "p-throttle": "^5.0.0",
     "qs": "6.11.0",
+    "rxjs": "^7.8.1",
     "slate": "^0.94.0"
   },
   "devDependencies": {
@@ -87,6 +89,7 @@
     "eslint-plugin-prettier": "^4.2.1",
     "nodemon": "2.0.22",
     "prettier": "2.8.4",
+    "prisma": "4.13.0",
     "ts-node": "10.9.1",
     "tsconfig-paths": "^4.2.0",
     "typescript": "5.0.4"

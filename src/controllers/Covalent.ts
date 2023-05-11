@@ -1,7 +1,7 @@
 import { Controller, Get, HttpCode, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { CovalentService } from 'services/covalent';
 import { QueryStatsLiquidityDto } from '../dto/Covalent';
-import { CovalentService } from '../services/covalent';
 
 @ApiTags('cov')
 @Controller('/api/rest/cov')

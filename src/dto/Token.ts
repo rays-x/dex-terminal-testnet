@@ -6,7 +6,7 @@ import {
   IsString,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Types } from 'mongoose';
+
 import { TokensSortBy, TokensSortOrder } from './coinMarketCapScraper';
 
 export class SwapTokensQueryDto {
@@ -20,13 +20,13 @@ export class SwapTokensQueryDto {
   @ApiPropertyOptional({
     type: String,
   })
-  exclude!: Types.ObjectId | string;
+  exclude!: string | string;
 
   @IsMongoId()
   @ApiProperty({
     type: String,
   })
-  chain!: Types.ObjectId | string;
+  chain!: string | string;
 
   @IsOptional()
   @IsNumberString()

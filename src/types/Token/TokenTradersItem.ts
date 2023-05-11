@@ -1,7 +1,7 @@
-import { Types } from 'mongoose';
+
 
 export interface TokenTradersItem {
-  id: Types.ObjectId | string;
+  id: string | string;
   date: Date | string;
   tradeAmount?: number;
   userCount?: number;

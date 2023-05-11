@@ -6,7 +6,8 @@ export interface Datum {
   dexerPlatformName: string;
   dexerTxhashFormat: string;
   visibilityOnDexscan: boolean;
-  icon: string;
+  addressExplorerUrl?: string;
+  chanId: number;
 }
 
 export interface Status {

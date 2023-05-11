@@ -6,7 +6,7 @@ import {
   IsString,
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Types } from 'mongoose';
+
 import { Type } from 'class-transformer';
 import { TokensSortBy, TokensSortOrder } from '../constants';
 
@@ -24,8 +24,8 @@ export default class NewQueryTokensDto {
     type: String,
     isArray: true,
   })
-  @Type(() => Types.ObjectId)
-  chains?: Types.ObjectId[] = [];
+  @Type(() => string)
+  chains?: string[] = [];
 
   @IsOptional()
   @IsNumberString()

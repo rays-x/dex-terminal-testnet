@@ -5,7 +5,7 @@ export default class TokenPaginationDto {
   @IsOptional()
   @IsNumberString()
   @ApiPropertyOptional()
-  limit?: string = '0';
+  limit?: string = '10';
 
   @IsOptional()
   @IsNumberString()

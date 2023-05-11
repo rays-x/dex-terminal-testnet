@@ -1,5 +1,6 @@
 import { Controller, Get, HttpCode, Param, Query } from '@nestjs/common';
 import { ApiParam, ApiTags } from '@nestjs/swagger';
+import { TokenService } from 'services/token';
 import {
   NewQueryTokensDto,
   TokenIdDto,
@@ -7,7 +8,6 @@ import {
   TokenPaginationDto,
   TokenSlugDto,
 } from '../dto/coinMarketCapScraper';
-import { TokenService } from '../services/token';
 
 @ApiTags('token')
 @Controller('/api/rest')
@@ -45,7 +45,7 @@ export class TokenController {
     type: String,
   })
   async volume(@Param() { id }: TokenIdDto, @Query() args: TokenPaginationDto) {
-    return this.service.volume(id, args);
+    return { items: [], count: 0 };
   }
 
   @Get('token/:id/liquidity')
@@ -58,7 +58,7 @@ export class TokenController {
     @Param() { id }: TokenIdDto,
     @Query() args: TokenPaginationDto
   ) {
-    return this.service.liquidity(id, args);
+    return {};
   }
 
   @Get('token/:id/transfers')
@@ -71,7 +71,7 @@ export class TokenController {
     @Param() { id }: TokenIdDto,
     @Query() args: TokenPaginationDto
   ) {
-    return this.service.transfers(id, args);
+    return { items: [], count: 0 };
   }
 
   @Get('token/:id/swaps')
@@ -81,7 +81,7 @@ export class TokenController {
     type: String,
   })
   async swaps(@Param() { id }: TokenIdDto, @Query() args: TokenPaginationDto) {
-    return this.service.swaps(id, args);
+    return { items: [], count: 0 };
   }
 
   @Get('token/:id/holders')
@@ -94,7 +94,7 @@ export class TokenController {
     @Param() { id }: TokenIdDto,
     @Query() args: TokenPaginationDto
   ) {
-    return this.service.holders(id, args);
+    return { items: [], count: 0 };
   }
 
   @Get('token/:id/traders')
@@ -107,7 +107,7 @@ export class TokenController {
     @Param() { id }: TokenIdDto,
     @Query() args: TokenPaginationDto
   ) {
-    return this.service.traders(id, args);
+    return { items: [], count: 0 };
   }
 
   @Get('token/:id/pairs')
@@ -130,6 +130,6 @@ export class TokenController {
     @Param() { id }: TokenIdStringDto,
     @Query() args: TokenPaginationDto
   ) {
-    return this.service.transactions(id, args);
+    return { items: [], count: 0 };
   }
 }
