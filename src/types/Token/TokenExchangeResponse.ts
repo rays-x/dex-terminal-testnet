@@ -1,4 +1,4 @@
-export interface TokenCMCPlatformDexsResponse {
+export interface TokenExchangeResponse {
   data: Data;
   status: Status;
 }

@@ -6,7 +6,6 @@ import {
   NestExpressApplication,
 } from '@nestjs/platform-express';
 import express from 'express';
-import mongoose from 'mongoose';
 import {
   AsyncApiDocumentBuilder,
   AsyncApiModule,
@@ -34,7 +33,6 @@ process.setMaxListeners(0);
 
 (async () => {
   // mongoose.set('debug', process.env.NODE_ENV === 'development');
-  mongoose.pluralize(null);
   Logger.useLogger(
     new DefaultLogger({
       level: process.env.LOGGER_LEVEL

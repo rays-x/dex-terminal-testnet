@@ -36,6 +36,7 @@ export async function getCmcTokens(): Promise<[string, CmcCoin][]> {
   const slugIndex = fields.indexOf('slug');
   const nameIndex = fields.indexOf('name');
   const isActiveIndex = fields.indexOf('is_active');
+  const rankIndex = fields.indexOf('rank');
 
   return values.map((value) => [
     value[idIndex],
@@ -45,6 +46,7 @@ export async function getCmcTokens(): Promise<[string, CmcCoin][]> {
       symbol: value[symbolIndex],
       contracts: value[addressIndex],
       isActive: Boolean(value[isActiveIndex]),
+      rank: value[rankIndex],
     },
   ]);
 }
@@ -78,7 +80,7 @@ export async function getUniswapTokenContracts(): Promise<string[]> {
 }
 
 export async function getCmcStats(
-  ids: string[]
+  ids: (number | string)[]
 ): Promise<Record<string, CmcStats>> {
   const throttled = throttle(async (_ids: string[]) => {
     const { status, data } = await req<CmcStatsResponse>(

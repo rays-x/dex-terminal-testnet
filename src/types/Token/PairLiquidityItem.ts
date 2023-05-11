@@ -1,7 +1,7 @@
-import { Types } from 'mongoose';
+
 
 export interface PairLiquidityItem {
-  id: Types.ObjectId | string;
+  id: string | string;
   date: Date | string;
   liquidity: number;
 }

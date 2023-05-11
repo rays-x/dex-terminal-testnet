@@ -1,7 +1,7 @@
-import { Types } from 'mongoose';
+
 
 export interface TokenPairItem {
-  id: Types.ObjectId | string;
+  id: string | string;
   base: any;
   quote: any;
   dex: any;

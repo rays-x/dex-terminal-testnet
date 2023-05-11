@@ -13,7 +13,7 @@ import { ApiTags } from '@nestjs/swagger';
 import express from 'express';
 import { get } from 'lodash-es';
 import got from 'got';
-import { CoinMarketCapScraperService } from '../services/coinMarketCapScraper';
+import { CoinMarketCapScraperService } from 'services/coinMarketCapScraper';
 import {
   QueryPairListDto,
   QueryPairsInfoDto,

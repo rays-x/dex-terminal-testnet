@@ -129,18 +129,6 @@ const expressPlugins = (expressInstance: express.Express) => {
     });
     expressSession(req, res, next);
   });
-  /* payloadInit(payload, {
-    secret: process.env.PAYLOAD_SECRET,
-    mongoURL: process.env.MONGO_CONNECTION_STRING,
-    mongoOptions: {
-      // useFindAndModify:false
-    },
-    express,
-    local: true,
-    onInit: (app) => {
-      app.logger.info('Payload Initialized');
-    }
-  }); */
 };
 
 export default expressPlugins;
