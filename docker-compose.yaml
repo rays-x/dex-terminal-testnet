@@ -6,18 +6,6 @@ services:
   #  ports:
   #    - 2055:80
 
-  mongo:
-    container_name: "ray_mongo"
-    image: mongo
-    ports:
-      - "27001:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: root123
-    volumes:
-      - mongo-db:/data/db
-      - mongo-db-config:/data/configdb
-
   redis:
     container_name: "ray_redis"
     image: redis:alpine
@@ -31,64 +19,25 @@ services:
     command: "/bin/sh -c redis-server & echo 'echo never > /sys/kernel/mm/transparent_hugepage/enabled' > /etc/rc.local"
 
   postgres:
-    container_name: hb_postgres
+    container_name: "ray_postgres"
     image: postgres:15
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_DB=HummingBot
-      - POSTGRES_PASSWORD=HummingBot
-      - POSTGRES_USER=HummingBot
+      - POSTGRES_DB=RaysX
+      - POSTGRES_PASSWORD=RaysX
+      - POSTGRES_USER=RaysX
       - PGDATA=/var/lib/postgresql/data
     volumes:
       - pg-data:/var/lib/postgresql/data
-
-  rabbitmq:
-    container_name: hb_rabbitmq
-    image: rabbitmq:3.11-management-alpine
-    ports:
-      - "1883:1883"
-      - "5672:5672"
-      - "15672:15672"
-    volumes:
-      - ./docker/rabbitmq/20-main.conf:/etc/rabbitmq/conf.d/20-main.conf:ro
-      - rabbitmq-data:/var/lib/rabbitmq
-    healthcheck:
-      test: rabbitmq-diagnostics -q ping
-      interval: 5s
-      timeout: 30s
-      retries: 5
-
-  minio:
-    container_name: hb_minio
-    image: minio/minio
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio-data:/data
-    environment:
-      MINIO_ROOT_USER: HummingBot
-      MINIO_ROOT_PASSWORD: HummingBot
-    #      MINIO_BROWSER: off
-    command: server --console-address ":9001" /data
 
 networks:
   default:
     name: "ray"
 
 volumes:
-  mongo-db:
-    name: "ray_mongo-db"
-    # external: true
-  mongo-db-config:
-    name: "ray_mongo-db-config"
   redis:
     name: "ray_redis"
     # external: true
   pg-data:
-    name: "hb.postgres"
-  minio-data:
-    name: "hb.minio"
-  rabbitmq-data:
-    name: "hb.rabbitmq"
+    name: "ray_postgres"
