@@ -36,6 +36,8 @@ const throttle = pThrottle({
   interval: 2000,
 });
 
+const supportedBlockchainCmcIds = [1, 25, 51];
+
 @Injectable()
 export class TokenService {
   public constructor(
@@ -99,6 +101,7 @@ export class TokenService {
     const pairs = await this.prisma.exchangePair.findMany({
       where: {
         OR: [{ BaseToken: { id: parsedId } }, { QuoteToken: { id: parsedId } }],
+        Exchange: { Blockchain: { cmc_id: { in: supportedBlockchainCmcIds } } },
       },
       orderBy: { volume: 'desc' },
       take: Number.parseInt(limit, 10),
@@ -108,9 +111,19 @@ export class TokenService {
             TokenBlockchainRecords: true,
           },
         },
-        QuoteToken: true,
+        QuoteToken: {
+          include: {
+            TokenBlockchainRecords: true,
+          },
+        },
         Exchange: {
-          include: { Blockchain: { include: { ParentToken: true } } },
+          include: {
+            Blockchain: {
+              include: {
+                ParentToken: true,
+              },
+            },
+          },
         },
       },
     });
@@ -130,6 +143,7 @@ export class TokenService {
           slug: pair.QuoteToken.cmc_slug,
           cmc: pair.QuoteToken.cmc_id,
           symbol: pair.QuoteToken.symbol,
+          address: pair.QuoteToken.TokenBlockchainRecords[0]?.address || '',
           image: '',
         },
         platform: {
@@ -144,7 +158,7 @@ export class TokenService {
           name: pair.Exchange.name,
           cmc: pair.Exchange.cmc_id,
         },
-        address: '',
+        reverseOrder: pair.QuoteToken.id === Number.parseInt(id, 10),
       })),
       count: pairs.length,
     };
@@ -212,7 +226,6 @@ export class TokenService {
             const tokenInfo = {
               symbol: info.symbol,
               name: info.name,
-              cmc_added_date: stat.date_added,
               launched_date: stat.date_added,
               description: '',
               category: '',
@@ -316,7 +329,6 @@ export class TokenService {
             const tokenInfo = {
               symbol: info.symbol,
               name: info.name,
-              cmc_added_date: stat.date_added,
               launched_date: stat.date_added,
               description: '',
               category: '',
