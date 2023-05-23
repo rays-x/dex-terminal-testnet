@@ -35,14 +35,6 @@ export class CoinMarketCapScraperService {
 
   constructor(@InjectRedis(REDIS_TAG) private readonly redisClient: Redis) {}
 
-  public async onModuleInit(): Promise<void> {
-    try {
-      await this.tokens();
-    } catch (e) {
-      Logger.error(e?.message || e);
-    }
-  }
-
   async tokens(
     networks: Network[] = [Network.bsc, Network.eth]
   ): Promise<CmcToken[]> {

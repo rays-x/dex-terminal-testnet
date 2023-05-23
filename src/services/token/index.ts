@@ -1,14 +1,9 @@
-import { get } from 'lodash-es';
+import { get, invert } from 'lodash-es';
 import Redis from 'ioredis';
 import { HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { proxyRequest } from 'helpers/proxyRequest';
 import { InjectRedis } from '@liaoliaots/nestjs-redis';
-import {
-  getCmcStats,
-  getCmcTokens,
-} from 'services/coinMarketCapScraper/helpers';
-import { ExchangeType, Token } from 'generated/client';
-import pThrottle from 'p-throttle';
+import { ExchangeType } from 'generated/client';
 import { PrismaService } from '../prisma';
 import { awaiter } from '../../utils';
 import { CMC_USER_AGENT, REDIS_TAG } from '../../constants';
@@ -17,26 +12,26 @@ import { TokenCMCTokenInfoResponse } from '../../types/Token/TokenCMCTokenInfoRe
 import { Logger } from '../../config/logger/api-logger';
 import { NewQueryTokensDto } from '../../dto/coinMarketCapScraper';
 import { CmcToken } from '../coinMarketCapScraper/types';
-import { HttpStatusMessages } from '../../messages/http';
+import { getSelectTokensQuery, mapDbTokenToResponse } from './helpers';
 import {
-  getDexExchangesData,
-  getExchangePairs,
-  getPlatformsData,
-  mapDbTokenToResponse,
-} from './helpers';
+  getCoinGeckoCoins,
+  getCoinGeckoCoinsWithStats,
+  getCoinGeckoExchanges,
+  getCoinGeckoPairs,
+} from './coinGecko';
 
 const DEFAULT_AWAIT_TIME: number = 0.65 * 1000;
 
-const TOKEN_LIMIT = 5000;
+const TOKEN_LIMIT = 1000;
 
 const POSTGRES_TX_TIMEOUT = 60 * 1000;
 
-const throttle = pThrottle({
-  limit: 1,
-  interval: 2000,
-});
+const coingeckoNetworksMapper = {
+  ethereum: 'eth',
+  'binance-smart-chain': 'bsc',
+};
 
-const supportedBlockchainCmcIds = [1, 25, 51];
+const invertedCoingeckoNetworksMapper = invert(coingeckoNetworksMapper);
 
 @Injectable()
 export class TokenService {
@@ -57,8 +52,6 @@ export class TokenService {
   }
 
   public async tokens({
-    chains,
-    search,
     limit,
     offset,
     sortBy,
@@ -67,9 +60,13 @@ export class TokenService {
     tokens: CmcToken[];
     tokensCount: number;
   }> {
-    const tokens = await this.prisma.token.findMany({
-      take: Number.parseInt(limit, 10),
-    });
+    const tokens = await getSelectTokensQuery(
+      this.prisma,
+      sortBy,
+      sortOrder,
+      Number.parseInt(limit, 10),
+      Number.parseInt(offset, 10)
+    );
 
     return {
       tokens: tokens.map(mapDbTokenToResponse),
@@ -79,14 +76,12 @@ export class TokenService {
 
   public async token(slug: string): Promise<any> {
     const token = await this.prisma.token.findUnique({
-      where: { cmc_slug: slug },
+      where: { coingecko_slug: slug },
+      include: { TokenBlockchainRecords: true },
     });
 
     if (!token) {
-      throw new HttpException(
-        HttpStatusMessages.NOT_FOUND,
-        HttpStatus.NOT_FOUND
-      );
+      throw new HttpException({}, HttpStatus.NOT_FOUND);
     }
 
     return mapDbTokenToResponse(token);
@@ -100,30 +95,26 @@ export class TokenService {
 
     const pairs = await this.prisma.exchangePair.findMany({
       where: {
-        OR: [{ BaseToken: { id: parsedId } }, { QuoteToken: { id: parsedId } }],
-        Exchange: { Blockchain: { cmc_id: { in: supportedBlockchainCmcIds } } },
+        OR: [
+          { BaseTokenBlockchainRecord: { Token: { id: parsedId } } },
+          { QuoteTokenBlockchainRecord: { Token: { id: parsedId } } },
+        ],
       },
-      orderBy: { volume: 'desc' },
+      orderBy: { reserve_in_usd: 'desc' },
       take: Number.parseInt(limit, 10),
       include: {
-        BaseToken: {
+        BaseTokenBlockchainRecord: {
           include: {
-            TokenBlockchainRecords: true,
+            Token: true,
           },
         },
-        QuoteToken: {
+        QuoteTokenBlockchainRecord: {
           include: {
-            TokenBlockchainRecords: true,
+            Token: true,
           },
         },
         Exchange: {
-          include: {
-            Blockchain: {
-              include: {
-                ParentToken: true,
-              },
-            },
-          },
+          include: { Blockchain: true },
         },
       },
     });
@@ -131,34 +122,34 @@ export class TokenService {
     return {
       items: pairs.map((pair) => ({
         base: {
-          id: pair.BaseToken.id,
-          slug: pair.BaseToken.cmc_slug,
-          cmc: pair.BaseToken.cmc_id,
-          symbol: pair.BaseToken.symbol,
-          address: pair.BaseToken.TokenBlockchainRecords[0]?.address || '',
+          id: pair.BaseTokenBlockchainRecord.Token?.id || '',
+          slug: pair.BaseTokenBlockchainRecord.Token?.coingecko_slug || '',
+          symbol:
+            pair.BaseTokenBlockchainRecord.Token?.symbol.toUpperCase() || '',
+          address: pair.BaseTokenBlockchainRecord.address,
           image: '',
         },
         quote: {
-          id: pair.QuoteToken.id,
-          slug: pair.QuoteToken.cmc_slug,
-          cmc: pair.QuoteToken.cmc_id,
-          symbol: pair.QuoteToken.symbol,
-          address: pair.QuoteToken.TokenBlockchainRecords[0]?.address || '',
+          id: pair.QuoteTokenBlockchainRecord.Token?.id || '',
+          slug: pair.QuoteTokenBlockchainRecord.Token?.coingecko_slug || '',
+          symbol:
+            pair.QuoteTokenBlockchainRecord.Token?.symbol.toUpperCase() || '',
+          address: pair.QuoteTokenBlockchainRecord.address,
           image: '',
         },
         platform: {
           id: pair.Exchange.Blockchain.id,
           chainId: pair.Exchange.Blockchain.evm_chain_id,
-          cmc: pair.Exchange.Blockchain.cmc_id,
           dexerTxHashFormat: pair.Exchange.Blockchain.explorer_tx_url_format,
         },
-        liquidity: 0,
+        liquidity: pair.reserve_in_usd,
         dex: {
           id: pair.Exchange.id,
           name: pair.Exchange.name,
-          cmc: pair.Exchange.cmc_id,
         },
-        reverseOrder: pair.QuoteToken.id === Number.parseInt(id, 10),
+        reverseOrder: false,
+        coingeckoPoolId: pair.coingecko_pool_id,
+        name: pair.pool_name,
       })),
       count: pairs.length,
     };
@@ -188,94 +179,85 @@ export class TokenService {
 
     await this.prisma.$transaction(
       async (txClient) => {
-        const tokens = await getCmcTokens();
-
-        const limitedTokens = tokens
-          .filter(([, info]) => info.isActive)
-          .sort(([, l], [, r]) => l.rank - r.rank)
-          .slice(0, TOKEN_LIMIT);
-
-        const cmcTokenIds = limitedTokens.map(([id]) =>
-          Number.parseInt(id, 10)
+        const coingGeckoTokens = await getCoinGeckoCoins();
+        const coingGeckoTokensMap = new Map(
+          coingGeckoTokens.map((token) => [token.id.toLowerCase(), token])
         );
+
+        const coinGeckoStats = await getCoinGeckoCoinsWithStats(TOKEN_LIMIT);
 
         await txClient.token.deleteMany({
           where: {
-            cmc_id: {
-              notIn: cmcTokenIds,
+            coingecko_slug: {
+              notIn: coinGeckoStats.map(({ id }) => id),
             },
-            OwnedBlockchain: null,
           },
         });
 
-        const stats = await getCmcStats(cmcTokenIds);
-        const platformsCmc = await getPlatformsData();
-        const platformsCmcMap = new Map(
-          platformsCmc.map((t) => [t.cryptoId, t])
+        const availableBlockchainsSet = new Set(
+          Object.keys(coingeckoNetworksMapper)
         );
 
         await Promise.all(
-          limitedTokens.map(async ([id, info]) => {
-            const parsedId = Number.parseInt(id, 10);
+          coinGeckoStats.map(async (stat) => {
+            const { platforms } =
+              coingGeckoTokensMap.get(stat.id.toLowerCase()) || {};
 
-            const stat = stats[id];
-
-            const parentBlockchain =
-              stat.platform && platformsCmcMap.get(stat.platform.id);
+            if (!platforms || !Object.keys(platforms).length) {
+              return;
+            }
 
             const tokenInfo = {
-              symbol: info.symbol,
-              name: info.name,
-              launched_date: stat.date_added,
+              symbol: stat.symbol,
+              name: stat.name,
+              launched_date: stat.atl_date,
+              image: stat.image,
               description: '',
               category: '',
-              price: stat.quote.USD.price.toString(),
-              price_change_perc_1h: stat.quote.USD.percent_change_1h,
-              price_change_perc_24h: stat.quote.USD.percent_change_24h,
-              price_change_perc_7d: stat.quote.USD.percent_change_7d,
-              market_cap: stat.quote.USD.market_cap?.toString(),
-              market_cap_change_perc_24h: 0,
+              price: stat.current_price?.toString() || '0',
+              price_change_perc_1h: stat.price_change_percentage_1h_in_currency,
+              price_change_perc_24h: stat.price_change_24h,
+              price_change_perc_7d: stat.price_change_percentage_7d_in_currency,
+              market_cap: stat.market_cap?.toString(),
+              market_cap_change_perc_24h: stat.market_cap_change_24h,
               fully_diluted_market_cap:
-                stat.quote.USD.fully_diluted_market_cap?.toString(),
+                stat.fully_diluted_valuation?.toString(),
               fully_diluted_market_cap_change_perc_24h: 0,
               circulating_supply: stat.circulating_supply?.toString(),
               total_supply: stat.total_supply?.toString(),
-              self_reported_circulating_supply:
-                stat.self_reported_circulating_supply?.toString(),
-              volume: stat.quote.USD.volume_24h?.toString(),
-              volume_change_perc_24h: stat.quote.USD.volume_change_24h,
-              TokenBlockchainRecords: parentBlockchain
-                ? {
-                    connectOrCreate: {
-                      where: {
-                        blockchain_cmc_id_address: {
-                          address: stat.platform.token_address,
-                          blockchain_cmc_id: parentBlockchain.id,
-                        },
-                      },
-                      create: {
-                        address: stat.platform.token_address,
-                        Blockchain: {
-                          connect: {
-                            parent_token_cmc_id: stat.platform.id,
-                          },
-                        },
-                      },
-                    },
-                  }
-                : undefined,
+              self_reported_circulating_supply: '0',
+              volume: stat.total_volume?.toString(),
+              volume_change_perc_24h: 0,
             };
 
-            return txClient.token.upsert({
-              where: { cmc_id: parsedId },
+            await txClient.token.upsert({
+              where: { coingecko_slug: stat.id },
               create: {
                 ...tokenInfo,
-                cmc_id: parsedId,
-                cmc_slug: info.slug,
+                coingecko_slug: stat.id,
+                TokenBlockchainRecords: {
+                  connectOrCreate: Object.entries(platforms)
+                    .filter(([k]) => availableBlockchainsSet.has(k))
+                    .map(([slug, address]) => {
+                      const createOpts = {
+                        address,
+                        blockchain_coingecko_slug: slug,
+                      };
+
+                      return {
+                        where: {
+                          blockchain_coingecko_slug_address: createOpts,
+                        },
+                        create: createOpts,
+                      };
+                    }),
+                },
               },
               update: tokenInfo,
               select: null,
             });
+
+            Logger.debug(`syncTokens synced ${stat.symbol}`);
           })
         );
       },
@@ -288,99 +270,30 @@ export class TokenService {
   private async syncPlatforms(): Promise<void> {
     Logger.debug(`syncPlatforms start`);
 
-    await this.prisma.$transaction(
-      async (txClient) => {
-        const platformsCmc = await getPlatformsData();
-        const platformsCmcMap = new Map(
-          platformsCmc.map((t) => [t.cryptoId, t])
-        );
+    this.prisma.$transaction(async (prismaTxClient) => {
+      await prismaTxClient.blockchain.deleteMany({
+        where: {
+          coingecko_slug: { notIn: Object.keys(coingeckoNetworksMapper) },
+        },
+      });
 
-        const tokens = await getCmcTokens();
-
-        const parentTokens = tokens.filter(([id]) =>
-          platformsCmcMap.has(Number.parseInt(id, 10))
-        );
-
-        const cmcTokenIds = parentTokens.map(([id]) => Number.parseInt(id, 10));
-
-        await txClient.token.deleteMany({
-          where: {
-            OwnedBlockchain: {
-              id: {
-                gt: 0,
-              },
+      await Promise.all(
+        Object.entries(coingeckoNetworksMapper).map(async ([k, v]) =>
+          prismaTxClient.blockchain.upsert({
+            where: { coingecko_slug: k },
+            create: {
+              explorer_addr_url_format: '',
+              explorer_token_url_format: '',
+              explorer_tx_url_format: '',
+              evm_chain_id: 1,
+              name: v,
+              coingecko_slug: k,
             },
-            cmc_id: {
-              notIn: cmcTokenIds,
-            },
-          },
-        });
-
-        const stats = await getCmcStats(cmcTokenIds);
-
-        await Promise.all(
-          parentTokens.map(async ([id, info]) => {
-            const parsedId = Number.parseInt(id, 10);
-
-            const stat = stats[id];
-
-            const blockchain = platformsCmcMap.get(parsedId);
-
-            const tokenInfo = {
-              symbol: info.symbol,
-              name: info.name,
-              launched_date: stat.date_added,
-              description: '',
-              category: '',
-              price: stat.quote.USD.price.toString(),
-              price_change_perc_1h: stat.quote.USD.percent_change_1h,
-              price_change_perc_24h: stat.quote.USD.percent_change_24h,
-              price_change_perc_7d: stat.quote.USD.percent_change_7d,
-              market_cap: stat.quote.USD.market_cap?.toString(),
-              market_cap_change_perc_24h: 0,
-              fully_diluted_market_cap:
-                stat.quote.USD.fully_diluted_market_cap?.toString(),
-              fully_diluted_market_cap_change_perc_24h: 0,
-              circulating_supply: stat.circulating_supply?.toString(),
-              total_supply: stat.total_supply?.toString(),
-              self_reported_circulating_supply:
-                stat.self_reported_circulating_supply?.toString(),
-              volume: stat.quote.USD.volume_24h?.toString(),
-              volume_change_perc_24h: stat.quote.USD.volume_change_24h,
-              OwnedBlockchain: blockchain
-                ? {
-                    connectOrCreate: {
-                      create: {
-                        cmc_id: blockchain.id,
-                        evm_chain_id: blockchain.chanId,
-                        name: blockchain.dexerPlatformName,
-                        explorer_addr_url_format: blockchain.addressExplorerUrl,
-                        explorer_token_url_format: blockchain.explorerUrlFormat,
-                        explorer_tx_url_format: blockchain.dexerTxhashFormat,
-                      },
-                      where: {
-                        cmc_id: blockchain.id,
-                      },
-                    },
-                  }
-                : undefined,
-            };
-
-            return txClient.token.upsert({
-              where: { cmc_id: parsedId },
-              create: {
-                ...tokenInfo,
-                cmc_id: parsedId,
-                cmc_slug: info.slug,
-              },
-              update: tokenInfo,
-              select: null,
-            });
+            update: {},
           })
-        );
-      },
-      { timeout: POSTGRES_TX_TIMEOUT }
-    );
+        )
+      );
+    });
 
     Logger.debug(`syncPlatforms done`);
   }
@@ -390,46 +303,43 @@ export class TokenService {
 
     await this.prisma.$transaction(
       async (txClient) => {
-        const supportedBlockchains = await txClient.blockchain.findMany({
-          select: { cmc_id: true },
-        });
-
-        const supportedBlockchainsSet = new Set(
-          supportedBlockchains.map((bc) => bc.cmc_id)
+        const exchangesByBlockchains = await Promise.all(
+          Object.entries(coingeckoNetworksMapper).map(
+            async ([blockchainSlug, netw]) => ({
+              exchanges: await getCoinGeckoExchanges(netw),
+              blockchainSlug,
+            })
+          )
         );
 
-        const exchanges = await getDexExchangesData();
-
         await Promise.all(
-          exchanges
-            .filter((exchange) =>
-              supportedBlockchainsSet.has(exchange.platformId)
-            )
-            .map(async (exchange) => {
-              const data = {
-                name: exchange.dexerName,
-                txs_24h: Number.parseInt(exchange.txns24h, 10),
-                liquidity_score: exchange.liquidityScore
-                  ? Number.parseFloat(exchange.liquidityScore)
-                  : undefined,
-                exchange_score: exchange.exchangeScore
-                  ? Number.parseFloat(exchange.exchangeScore)
-                  : undefined,
-                volume_1h: exchange.volume1h,
-                volume_24h: exchange.volume24h,
-                Type: ExchangeType.DEX,
-              };
+          exchangesByBlockchains.map(async ({ exchanges, blockchainSlug }) => {
+            const blockchain = await this.prisma.blockchain.findFirstOrThrow({
+              where: { coingecko_slug: blockchainSlug },
+            });
 
-              return txClient.exchange.upsert({
-                where: { cmc_id: exchange.dexerId },
-                update: data,
-                create: {
-                  ...data,
-                  cmc_id: exchange.dexerId,
-                  Blockchain: { connect: { cmc_id: exchange.platformId } },
-                },
-              });
-            })
+            if (!blockchain) {
+              throw new Error('Blockchain matched dex not found!');
+            }
+
+            await Promise.all(
+              exchanges.data.map(async (dex) =>
+                txClient.exchange.upsert({
+                  where: { coingecko_slug: dex.id },
+                  update: {
+                    coingecko_slug: dex.id,
+                    name: dex.attributes.name,
+                  },
+                  create: {
+                    coingecko_slug: dex.id,
+                    name: dex.attributes.name,
+                    Type: ExchangeType.DEX,
+                    Blockchain: { connect: { id: blockchain.id } },
+                  },
+                })
+              )
+            );
+          })
         );
       },
       { timeout: POSTGRES_TX_TIMEOUT }
@@ -442,69 +352,151 @@ export class TokenService {
     Logger.debug(`syncPairs start`);
 
     const tokens = await this.prisma.token.findMany({
-      select: { cmc_id: true, symbol: true },
+      include: { TokenBlockchainRecords: true },
     });
 
-    const throttled = throttle(async (token: Token) => {
-      await this.prisma.$transaction(async (txClient) => {
-        const exchangePairs = await getExchangePairs(token.cmc_id);
+    await this.prisma.exchangePair.deleteMany({});
 
-        await Promise.all(
-          exchangePairs.map(async (pair) => {
-            const supportedExchange = await this.prisma.exchange.findFirst({
-              where: { cmc_id: pair.exchangeId },
-              select: null,
-            });
+    for (let i = 0; i < 20; i++) {
+      const token = tokens[i];
 
-            const supportedTokens = await Promise.all(
-              [pair.baseCurrencyId, pair.quoteCurrencyId].map(async (id) =>
-                this.prisma.token.findFirst({
-                  where: { cmc_id: id },
-                  select: null,
-                })
-              )
-            );
+      let pairsSynced = 0;
 
-            if (!supportedExchange || !supportedTokens.every(Boolean)) {
-              return null;
-            }
+      await this.prisma.$transaction(
+        async (txClient) => {
+          if (!token.TokenBlockchainRecords.length) {
+            return;
+          }
 
-            const data = {
-              volume: pair.volumeUsd.toString(),
-              price: pair.price.toString(),
-              category: pair.category,
-            };
+          await Promise.all(
+            token.TokenBlockchainRecords.map(async (network) => {
+              try {
+                const coinGeckoTerminalNetworkSlug =
+                  coingeckoNetworksMapper[network.blockchain_coingecko_slug];
 
-            return txClient.exchangePair.upsert({
-              where: {
-                base_token_cmc_id_quote_token_cmc_id_exchange_cmc_id: {
-                  base_token_cmc_id: pair.baseCurrencyId,
-                  quote_token_cmc_id: pair.quoteCurrencyId,
-                  exchange_cmc_id: pair.exchangeId,
-                },
-              },
-              update: data,
-              create: {
-                ...data,
-                BaseToken: {
-                  connect: { cmc_id: pair.baseCurrencyId },
-                },
-                QuoteToken: {
-                  connect: { cmc_id: pair.quoteCurrencyId },
-                },
-                Exchange: {
-                  connect: { cmc_id: pair.exchangeId },
-                },
-              },
-            });
-          })
-        );
-      });
+                if (!coinGeckoTerminalNetworkSlug) {
+                  throw new Error('Not network not supported');
+                }
 
-      Logger.debug(`syncPairs synced ${token.symbol}`);
-    });
+                const pairs = await getCoinGeckoPairs(
+                  coinGeckoTerminalNetworkSlug,
+                  network.address
+                );
 
-    await Promise.all(tokens.slice(0, 100).map(throttled));
+                await Promise.all(
+                  pairs.data
+                    .filter(
+                      (pair) =>
+                        /* support only pools with 2 tokens */
+                        [...pair.attributes.name.matchAll(/ \/ /gi)].length <= 1
+                    )
+                    .map(async (pair) => {
+                      const poolData = {
+                        volume: '0',
+                        price: '0',
+                        price_change_24h: 0,
+                        reserve_in_usd: pair.attributes.reserve_in_usd,
+                        coingecko_pool_id: pair.id,
+                        pool_name: pair.attributes.name,
+                      };
+
+                      const [baseTokenBlockchainSlug, baseTokenAddress] =
+                        pair.relationships.base_token.data.id.split('_');
+
+                      const mappedBaseBlockchainSlug =
+                        invertedCoingeckoNetworksMapper[
+                          baseTokenBlockchainSlug
+                        ];
+
+                      const [quoteTokenBlockchainSlug, quoteTokenAddress] =
+                        pair.relationships.quote_token.data.id.split('_');
+
+                      const mappedQuoteBlockchainSlug =
+                        invertedCoingeckoNetworksMapper[
+                          quoteTokenBlockchainSlug
+                        ];
+
+                      await txClient.exchangePair.upsert({
+                        where: {
+                          base_token_blockchain_record_address_base_token_blockchain_slug_quote_token_blockchain_record_address_quote_token_blockchain_slug_exchange_coingecko_slug:
+                            {
+                              exchange_coingecko_slug:
+                                pair.relationships.dex.data.id,
+                              base_token_blockchain_record_address:
+                                baseTokenAddress,
+                              base_token_blockchain_slug:
+                                mappedBaseBlockchainSlug,
+                              quote_token_blockchain_record_address:
+                                quoteTokenAddress,
+                              quote_token_blockchain_slug:
+                                mappedQuoteBlockchainSlug,
+                            },
+                        },
+                        create: {
+                          Exchange: {
+                            connect: {
+                              coingecko_slug: pair.relationships.dex.data.id,
+                            },
+                          },
+                          BaseTokenBlockchainRecord: {
+                            connectOrCreate: {
+                              where: {
+                                blockchain_coingecko_slug_address: {
+                                  blockchain_coingecko_slug:
+                                    mappedBaseBlockchainSlug,
+                                  address: baseTokenAddress,
+                                },
+                              },
+                              create: {
+                                address: baseTokenAddress,
+                                Blockchain: {
+                                  connect: {
+                                    coingecko_slug: mappedBaseBlockchainSlug,
+                                  },
+                                },
+                              },
+                            },
+                          },
+                          QuoteTokenBlockchainRecord: {
+                            connectOrCreate: {
+                              where: {
+                                blockchain_coingecko_slug_address: {
+                                  blockchain_coingecko_slug:
+                                    mappedQuoteBlockchainSlug,
+                                  address: quoteTokenAddress,
+                                },
+                              },
+                              create: {
+                                address: quoteTokenAddress,
+                                Blockchain: {
+                                  connect: {
+                                    coingecko_slug: mappedQuoteBlockchainSlug,
+                                  },
+                                },
+                              },
+                            },
+                          },
+                          ...poolData,
+                        },
+                        update: poolData,
+                      });
+
+                      pairsSynced++;
+                    })
+                );
+              } catch (err) {
+                Logger.error(
+                  `syncPairs failed to sync ${token.symbol} on network ${network.blockchain_coingecko_slug} (address: ${network.address}): ${err}`
+                );
+              }
+            })
+          );
+        },
+        { maxWait: 60000, timeout: 15000 }
+      );
+
+      Logger.debug(`syncPairs synced ${token.symbol} (${pairsSynced} pairs)`);
+    }
 
     Logger.debug(`syncPairs done`);
   }

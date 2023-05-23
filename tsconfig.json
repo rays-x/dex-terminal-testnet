@@ -26,7 +26,8 @@
       "helpers/*": ["./src/helpers/*"],
       "services/*": ["./src/services/*"],
       "generated/*": ["./prisma/generated/*"],
-      "types/*": ["./prisma/types/*"]
+      "types/*": ["./prisma/types/*"],
+      "dto/*": ["./src/dto/*"]
     }
   },
   "include": ["src", "declarations", "prisma", "./.eslintrc.cjs"],
