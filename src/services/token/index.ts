@@ -1,13 +1,10 @@
 import { get, invert } from 'lodash-es';
 import Redis from 'ioredis';
 import { HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
-import { proxyRequest } from 'helpers/proxyRequest';
 import { InjectRedis } from '@liaoliaots/nestjs-redis';
 import { ExchangeType } from 'generated/client';
 import { PrismaService } from '../prisma';
-import { awaiter } from '../../utils';
-import { CMC_USER_AGENT, REDIS_TAG } from '../../constants';
-import { TokenCMCTokenInfoResponse } from '../../types/Token/TokenCMCTokenInfoResponse';
+import { REDIS_TAG } from '../../constants';
 
 import { Logger } from '../../config/logger/api-logger';
 import { NewQueryTokensDto } from '../../dto/coinMarketCapScraper';
@@ -18,17 +15,23 @@ import {
   getCoinGeckoCoinsWithStats,
   getCoinGeckoExchanges,
   getCoinGeckoPairs,
+  getPoolInfo,
 } from './coinGecko';
-
-const DEFAULT_AWAIT_TIME: number = 0.65 * 1000;
+import { countUniqueSenders } from './bitQuery';
 
 const TOKEN_LIMIT = 1000;
+const PAIRS_LIMIT = 100;
 
 const POSTGRES_TX_TIMEOUT = 60 * 1000;
 
 const coingeckoNetworksMapper = {
   ethereum: 'eth',
   'binance-smart-chain': 'bsc',
+};
+
+const bitQueryNetworksMapper = {
+  'binance-smart-chain': 'bsc',
+  ethereum: 'ethereum',
 };
 
 const invertedCoingeckoNetworksMapper = invert(coingeckoNetworksMapper);
@@ -42,10 +45,10 @@ export class TokenService {
 
   public async onModuleInit() {
     try {
-      await this.syncPlatforms();
-      await this.syncTokens();
-      await this.syncDexs();
-      await this.syncPairs();
+      // await this.syncPlatforms();
+      // await this.syncTokens();
+      // await this.syncDexs();
+      // await this.syncPairs();
     } catch (e) {
       Logger.error(get(e, 'message', e));
     }
@@ -142,7 +145,6 @@ export class TokenService {
           chainId: pair.Exchange.Blockchain.evm_chain_id,
           dexerTxHashFormat: pair.Exchange.Blockchain.explorer_tx_url_format,
         },
-        liquidity: pair.reserve_in_usd,
         dex: {
           id: pair.Exchange.id,
           name: pair.Exchange.name,
@@ -150,28 +152,18 @@ export class TokenService {
         reverseOrder: false,
         coingeckoPoolId: pair.coingecko_pool_id,
         name: pair.pool_name,
+        volume: pair.volume,
+        liquidity: pair.reserve_in_usd,
+        price: pair.price,
+        priceChangePerc24h: pair.price_change_perc_24h,
+        tradesCount: pair.trades_count,
+        sellsCount: pair.sells_count,
+        buysCount: pair.buys_count,
+        buyersCount: pair.unique_buyers_count,
+        sellersCount: pair.unique_sellers_count,
       })),
       count: pairs.length,
     };
-  }
-
-  private async getTokenData(slug: string): Promise<TokenCMCTokenInfoResponse> {
-    await awaiter(DEFAULT_AWAIT_TIME);
-
-    const body = await proxyRequest<string>(
-      {
-        headers: {
-          'user-agent': CMC_USER_AGENT,
-          'accept-encoding': 'gzip, deflate, br',
-        },
-      },
-      `https://coinmarketcap.com/currencies/${slug}/`
-    );
-    const regex = body.match(
-      /<script id="__NEXT_DATA__" type="application\/json">(?<jsonData>.+)<\/script>/m
-    );
-    const data = JSON.parse(get(regex, 'groups.jsonData', 'null') || 'null');
-    return get(data, 'props.pageProps.info');
   }
 
   private async syncTokens() {
@@ -261,7 +253,7 @@ export class TokenService {
           })
         );
       },
-      { timeout: POSTGRES_TX_TIMEOUT }
+      { timeout: POSTGRES_TX_TIMEOUT * 5 }
     );
 
     Logger.debug(`syncTokens done`);
@@ -351,13 +343,15 @@ export class TokenService {
   private async syncPairs() {
     Logger.debug(`syncPairs start`);
 
+    const isoTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
     const tokens = await this.prisma.token.findMany({
       include: { TokenBlockchainRecords: true },
     });
 
     await this.prisma.exchangePair.deleteMany({});
 
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < PAIRS_LIMIT; i++) {
       const token = tokens[i];
 
       let pairsSynced = 0;
@@ -391,15 +385,6 @@ export class TokenService {
                         [...pair.attributes.name.matchAll(/ \/ /gi)].length <= 1
                     )
                     .map(async (pair) => {
-                      const poolData = {
-                        volume: '0',
-                        price: '0',
-                        price_change_24h: 0,
-                        reserve_in_usd: pair.attributes.reserve_in_usd,
-                        coingecko_pool_id: pair.id,
-                        pool_name: pair.attributes.name,
-                      };
-
                       const [baseTokenBlockchainSlug, baseTokenAddress] =
                         pair.relationships.base_token.data.id.split('_');
 
@@ -410,6 +395,44 @@ export class TokenService {
 
                       const [quoteTokenBlockchainSlug, quoteTokenAddress] =
                         pair.relationships.quote_token.data.id.split('_');
+
+                      const [uniqueBuyers, uniqueSellers] = await Promise.all(
+                        [baseTokenAddress, quoteTokenAddress].map(
+                          async (tokenAddr) =>
+                            countUniqueSenders(
+                              bitQueryNetworksMapper[
+                                network.blockchain_coingecko_slug
+                              ],
+                              pair.attributes.address,
+                              tokenAddr,
+                              isoTime
+                            )
+                        )
+                      );
+
+                      const poolStats = await getPoolInfo(
+                        coinGeckoTerminalNetworkSlug,
+                        pair.attributes.address,
+                        Number(
+                          pair.relationships.quote_token.data.id ===
+                            token.coingecko_slug
+                        )
+                      );
+
+                      const poolData = {
+                        volume: poolStats.volume,
+                        sells_count: poolStats.sellsCount,
+                        trades_count: poolStats.tradesCount,
+                        buys_count: poolStats.buysCount,
+                        price: poolStats.price,
+                        price_change_perc_24h:
+                          poolStats.priceChangePercentage24h,
+                        reserve_in_usd: pair.attributes.reserve_in_usd,
+                        coingecko_pool_id: pair.id,
+                        pool_name: pair.attributes.name,
+                        unique_buyers_count: uniqueBuyers,
+                        unique_sellers_count: uniqueSellers,
+                      };
 
                       const mappedQuoteBlockchainSlug =
                         invertedCoingeckoNetworksMapper[
@@ -492,7 +515,7 @@ export class TokenService {
             })
           );
         },
-        { maxWait: 60000, timeout: 15000 }
+        { maxWait: 60000, timeout: POSTGRES_TX_TIMEOUT * 4 }
       );
 
       Logger.debug(`syncPairs synced ${token.symbol} (${pairsSynced} pairs)`);

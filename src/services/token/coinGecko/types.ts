@@ -87,3 +87,57 @@ export type CoinGeckoStatsResponse = {
   z?: number;
   price_change_percentage_7d_in_currency: number;
 }[];
+
+export interface PoolStatsResponse {
+  data: {
+    id: string;
+    type: string;
+    attributes: {
+      address: string;
+      name: string;
+      fully_diluted_valuation: string;
+      base_token_id: string;
+      price_in_usd: string;
+      price_in_target_token: string;
+      token_prices_in_usd: Record<string, string>;
+      reserve_in_usd: string;
+      reserve_threshold_met: boolean;
+      from_volume_in_usd: string;
+      to_volume_in_usd: string;
+      api_address: string;
+      pool_fee: unknown;
+      token_weightages: unknown;
+      balancer_pool_id: unknown;
+      swap_count_24h: number;
+      swap_url: string;
+      sentiment_votes: {
+        total: number;
+        up_percentage: number;
+        down_percentage: number;
+      };
+      price_percent_change: unknown;
+      price_percent_changes: { last_24h: string };
+      price_percent_changes_by_token_id: unknown;
+      historical_data: {
+        last_24h: SwapsStats;
+      };
+      historical_data_by_token_id: unknown;
+      token_prices_by_token_id: unknown;
+      locked_liquidity: unknown;
+      security_indicators: unknown[];
+      pool_reports_count: number;
+      pool_created_at: unknown;
+      latest_swap_timestamp: string;
+      high_low_price_data_by_token_id: unknown;
+    };
+    relationships: unknown;
+  };
+}
+
+interface SwapsStats {
+  swaps_count: number;
+  price_in_usd: any;
+  volume_in_usd: string;
+  buy_swaps_count: number;
+  sell_swaps_count: number;
+}

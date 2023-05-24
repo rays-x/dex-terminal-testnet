@@ -68,7 +68,12 @@ model ExchangePair {
     coingecko_pool_id                     String
     volume                                String
     price                                 String
-    price_change_24h                      Float
+    price_change_perc_24h                 Float
+    sells_count                           Int
+    buys_count                            Int
+    trades_count                          Int
+    unique_buyers_count                   Int
+    unique_sellers_count                  Int
     reserve_in_usd                        String
     exchange_coingecko_slug               String
     BaseTokenBlockchainRecord             TokenBlockchainRecord @relation(name: "base_token_blockchain_record", fields: [base_token_blockchain_slug, base_token_blockchain_record_address], references: [blockchain_coingecko_slug, address])

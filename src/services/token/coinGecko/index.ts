@@ -6,6 +6,7 @@ import {
   CoinGeckoStatsResponse,
   CoinsListResponse,
   CoinsPairsResponse,
+  PoolStatsResponse,
 } from './types';
 
 export async function getCoinGeckoCoins(): Promise<CoinsListResponse> {
@@ -17,17 +18,19 @@ export async function getCoinGeckoCoins(): Promise<CoinsListResponse> {
   return body;
 }
 
-export async function getCoinGeckoPairs(
-  coinGeckoNetwork: string,
-  tokenAddress: string
-): Promise<CoinsPairsResponse> {
-  const { body } = await got.get<CoinsPairsResponse>(
-    `https://api.geckoterminal.com/api/v2/networks/${coinGeckoNetwork}/tokens/${tokenAddress}/pools`,
-    { responseType: 'json' }
-  );
+export const getCoinGeckoPairs = pThrottle({ limit: 1, interval: 1000 })(
+  async (
+    coinGeckoNetwork: string,
+    tokenAddress: string
+  ): Promise<CoinsPairsResponse> => {
+    const { body } = await got.get<CoinsPairsResponse>(
+      `https://api.geckoterminal.com/api/v2/networks/${coinGeckoNetwork}/tokens/${tokenAddress}/pools`,
+      { responseType: 'json' }
+    );
 
-  return body;
-}
+    return body;
+  }
+);
 
 export async function getCoinGeckoExchanges(
   coinGeckoNetwork: string
@@ -40,48 +43,70 @@ export async function getCoinGeckoExchanges(
   return body;
 }
 
-export async function getCoinGeckoCoinsWithStats(
-  limit: number,
-  perPage = 200
-): Promise<CoinGeckoStatsResponse> {
-  const throttled = pThrottle({ interval: 60 * 1000, limit: 1 })(
-    async (page: number) => {
-      const { body } = await got.get<CoinGeckoStatsResponse>(
-        'https://api.coingecko.com/api/v3/coins/markets',
-        {
-          searchParams: {
-            vs_currency: 'usd',
-            per_page: perPage,
-            page,
-            // sparkline: false,
-            price_change_percentage: '1h,24h,7d',
-            // locale: 'en',
-          },
-          responseType: 'json',
-          headers: {
-            accept:
-              'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'accept-language': 'en-US,en;q=0.9,ru-RU;q=0.8,ru;q=0.7',
-            'cache-control': 'max-age=0',
-            'sec-ch-ua':
-              '"Google Chrome";v="113", "Chromium";v="113", "Not-A.Brand";v="24"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"macOS"',
-            'sec-fetch-dest': 'document',
-            'sec-fetch-mode': 'navigate',
-            'sec-fetch-site': 'none',
-            'sec-fetch-user': '?1',
-            'upgrade-insecure-requests': '1',
-          },
-        }
-      );
-      return body;
-    }
-  );
+const PER_PAGE = 200;
 
+const throttledCoinGeckoMarkets = pThrottle({ interval: 60 * 1000, limit: 1 })(
+  async (page: number) => {
+    const { body } = await got.get<CoinGeckoStatsResponse>(
+      'https://api.coingecko.com/api/v3/coins/markets',
+      {
+        timeout: 10000,
+        searchParams: {
+          vs_currency: 'usd',
+          per_page: PER_PAGE,
+          page,
+          // sparkline: false,
+          price_change_percentage: '1h,24h,7d',
+          // locale: 'en',
+        },
+        responseType: 'json',
+      }
+    );
+    return body;
+  }
+);
+
+export async function getCoinGeckoCoinsWithStats(
+  limit: number
+): Promise<CoinGeckoStatsResponse> {
   const responses = await Promise.all(
-    Array.from({ length: limit / perPage }, (_, i) => i + 1).map(throttled)
+    Array.from({ length: limit / PER_PAGE }, (_, i) => i + 1).map(
+      throttledCoinGeckoMarkets
+    )
   );
 
   return responses.flat();
+}
+
+export async function getPoolInfo(
+  coinGeckoNetwork: string,
+  poolAddress: string,
+  baseToken: number
+) {
+  try {
+    const { body } = await got.get<PoolStatsResponse>(
+      `https://app.geckoterminal.com/api/p1/${coinGeckoNetwork}/pools/${poolAddress}`,
+      {
+        responseType: 'json',
+        searchParams: { base_token: baseToken },
+      }
+    );
+
+    return {
+      tradesCount: body.data.attributes.historical_data.last_24h.swaps_count,
+      buysCount: body.data.attributes.historical_data.last_24h.buy_swaps_count,
+      sellsCount:
+        body.data.attributes.historical_data.last_24h.sell_swaps_count,
+      volume: body.data.attributes.historical_data.last_24h.volume_in_usd,
+      liquidity: body.data.attributes.reserve_in_usd,
+      price: body.data.attributes.price_in_usd,
+      priceChangePercentage24h: Number.parseFloat(
+        body.data.attributes.price_percent_changes.last_24h.slice(0, -1)
+      ),
+    };
+  } catch {
+    throw new Error(
+      `Failed to get info about token ${baseToken}, pool ${poolAddress} in ${coinGeckoNetwork}`
+    );
+  }
 }
