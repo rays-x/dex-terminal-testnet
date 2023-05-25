@@ -10,9 +10,8 @@ datasource db {
 
 model Token {
     id                                       Int                     @id @default(autoincrement())
-    cmc_slug                                 String                  @unique
-    cmc_id                                   Int                     @unique
-    cmc_added_date                           DateTime
+    coingecko_slug                           String                  @unique
+    image                                    String?
     launched_date                            DateTime
     name                                     String
     symbol                                   String
@@ -22,7 +21,12 @@ model Token {
     price_change_perc_1h                     Float?
     price_change_perc_24h                    Float?
     price_change_perc_7d                     Float?
+    price_btc                                String                  @default("0")
+    price_eth                                String                  @default("0")
+    price_change_btc_perc_24h                Float                   @default(0)
+    price_change_eth_perc_24h                Float                   @default(0)
     market_cap                               String?
+    market_cap_rank                          Int?
     market_cap_change_perc_24h               Float?
     fully_diluted_market_cap                 String?
     fully_diluted_market_cap_change_perc_24h Float?
@@ -31,56 +35,67 @@ model Token {
     total_supply                             String?
     volume                                   String?
     volume_change_perc_24h                   Float?
-    BaseExchangePairs                        ExchangePair[]          @relation(name: "base_token")
-    QuoteExchangePairs                       ExchangePair[]          @relation(name: "quote_token")
     TokenBlockchainRecords                   TokenBlockchainRecord[]
-    OwnedBlockchain                          Blockchain?
+    last_updated                             DateTime                @default(now()) @updatedAt()
 
-    @@index([cmc_id])
-    @@index([cmc_slug])
+    @@index([coingecko_slug])
+    @@index([symbol])
+    @@index([market_cap_rank])
 }
 
 model Blockchain {
     id                        Int                     @id @default(autoincrement())
-    cmc_id                    Int                     @unique
+    coingecko_slug            String                  @unique
     name                      String
     evm_chain_id              Int?
-    parent_token_cmc_id       Int                     @unique
     explorer_tx_url_format    String?
     explorer_addr_url_format  String?
     explorer_token_url_format String?
     Tokens                    TokenBlockchainRecord[]
-    ParentToken               Token                   @relation(fields: [parent_token_cmc_id], references: [cmc_id])
-    Exchanges                 Exchange[]
+    Exchange                  Exchange[]
 
-    @@index([cmc_id])
+    @@index([coingecko_slug])
 }
 
 model TokenBlockchainRecord {
-    address           String
-    token_id          Int
-    blockchain_cmc_id Int
-    Token             Token      @relation(fields: [token_id], references: [id], onDelete: Cascade)
-    Blockchain        Blockchain @relation(fields: [blockchain_cmc_id], references: [cmc_id], onDelete: Cascade)
+    address                   String
+    token_id                  Int?
+    blockchain_coingecko_slug String
+    Token                     Token?         @relation(fields: [token_id], references: [id], onDelete: Cascade)
+    Blockchain                Blockchain     @relation(fields: [blockchain_coingecko_slug], references: [coingecko_slug], onDelete: Cascade)
+    BaseExchangePair          ExchangePair[] @relation(name: "base_token_blockchain_record")
+    QuoteExchangePair         ExchangePair[] @relation(name: "quote_token_blockchain_record")
 
-    @@id([blockchain_cmc_id, address])
+    @@id([blockchain_coingecko_slug, address])
+    @@index([address])
 }
 
 model ExchangePair {
-    volume             String
-    price              String
-    category           String
-    base_token_cmc_id  Int
-    quote_token_cmc_id Int
-    exchange_cmc_id    Int
-    BaseToken          Token    @relation(name: "base_token", fields: [base_token_cmc_id], references: [cmc_id], onDelete: Cascade)
-    QuoteToken         Token    @relation(name: "quote_token", fields: [quote_token_cmc_id], references: [cmc_id], onDelete: Cascade)
-    Exchange           Exchange @relation(fields: [exchange_cmc_id], references: [cmc_id])
+    pool_name                             String
+    coingecko_pool_id                     String
+    volume                                String
+    price                                 String
+    price_change_perc_24h                 Float
+    sells_count                           Int
+    buys_count                            Int
+    trades_count                          Int
+    unique_buyers_count                   Int
+    unique_sellers_count                  Int
+    reserve_in_usd                        String
+    exchange_coingecko_slug               String
+    BaseTokenBlockchainRecord             TokenBlockchainRecord @relation(name: "base_token_blockchain_record", fields: [base_token_blockchain_slug, base_token_blockchain_record_address], references: [blockchain_coingecko_slug, address], onDelete: Cascade)
+    QuoteTokenBlockchainRecord            TokenBlockchainRecord @relation(name: "quote_token_blockchain_record", fields: [quote_token_blockchain_slug, quote_token_blockchain_record_address], references: [blockchain_coingecko_slug, address], onDelete: Cascade)
+    Exchange                              Exchange              @relation(fields: [exchange_coingecko_slug], references: [coingecko_slug], onDelete: Cascade)
+    base_token_blockchain_record_address  String
+    quote_token_blockchain_record_address String
+    base_token_blockchain_slug            String
+    quote_token_blockchain_slug           String
 
-    @@id([base_token_cmc_id, quote_token_cmc_id, exchange_cmc_id])
-    @@index([base_token_cmc_id])
-    @@index([quote_token_cmc_id])
-    @@index([exchange_cmc_id])
+    @@id([base_token_blockchain_record_address, base_token_blockchain_slug, quote_token_blockchain_record_address, quote_token_blockchain_slug, exchange_coingecko_slug])
+    // @@index([base_token_coingecko_slug])
+    // @@index([quote_token_coingecko_slug])
+    @@index([exchange_coingecko_slug])
+    @@index([reserve_in_usd])
 }
 
 enum ExchangeType {
@@ -89,18 +104,13 @@ enum ExchangeType {
 }
 
 model Exchange {
-    id              Int            @id @default(autoincrement())
-    name            String
-    cmc_id          Int            @unique
-    txs_24h         Int
-    liquidity_score Float?
-    exchange_score  Float?
-    volume_1h       String
-    volume_24h      String
-    blockchain_id   Int
-    Type            ExchangeType
-    ExchangePair    ExchangePair[]
-    Blockchain      Blockchain     @relation(fields: [blockchain_id], references: [id], onDelete: Cascade)
+    id             Int            @id @default(autoincrement())
+    name           String
+    coingecko_slug String         @unique
+    blockchain_id  Int
+    Type           ExchangeType
+    ExchangePair   ExchangePair[]
+    Blockchain     Blockchain     @relation(fields: [blockchain_id], references: [id], onDelete: Cascade)
 
-    @@index([cmc_id])
+    @@index([coingecko_slug])
 }

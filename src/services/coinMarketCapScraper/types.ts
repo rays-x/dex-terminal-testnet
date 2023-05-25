@@ -23,7 +23,6 @@ export type CmcToken = {
   price: number;
   priceChangePercentage1h: number;
   priceChangePercentage24h: number;
-  cmcId: number;
 };
 
 export interface CoinGeckoTokens {

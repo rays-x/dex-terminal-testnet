@@ -1,7 +1,8 @@
 import got from 'got';
 
-import { Token } from 'generated/client';
+import { PrismaClient, Token, TokenBlockchainRecord } from 'generated/client';
 import { CmcToken } from 'services/coinMarketCapScraper/types';
+import { TokensSortBy, TokensSortOrder } from 'dto/coinMarketCapScraper';
 import { TokenExchangeResponse } from '../../types/Token/TokenExchangeResponse';
 import { MarketPairResponse } from '../../types/Token/TokenCMCPairResponse';
 import { TokenCMCPlatformsResponse } from '../../types/Token/TokenCMCPlatformsResponse';
@@ -60,14 +61,16 @@ export async function getExchangePairs(
 }
 
 export function mapDbTokenToResponse(
-  dbToken: Token
-): CmcToken & { cmc: number; platforms: unknown[]; statistics: unknown } {
+  dbToken: Token & {
+    TokenBlockchainRecords: TokenBlockchainRecord[];
+  }
+): CmcToken & { platforms: unknown[]; statistics: unknown } {
   return {
     id: dbToken.id.toString(),
-    slug: dbToken.cmc_slug,
+    slug: dbToken.coingecko_slug,
     name: dbToken.name,
-    symbol: dbToken.symbol,
-    logoURI: `https://s2.coinmarketcap.com/static/img/coins/64x64/${dbToken.cmc_id}.png`,
+    symbol: dbToken.symbol.toUpperCase(),
+    logoURI: dbToken.image || '',
     liquidity: Number.parseFloat(dbToken.fully_diluted_market_cap),
     volume: Number.parseFloat(dbToken.volume),
     volumeChangePercentage24h: dbToken.volume_change_perc_24h,
@@ -78,11 +81,17 @@ export function mapDbTokenToResponse(
     price: Number.parseFloat(dbToken.price),
     priceChangePercentage1h: dbToken.price_change_perc_1h,
     priceChangePercentage24h: dbToken.price_change_perc_24h,
-    cmcId: dbToken.cmc_id,
-    cmc: dbToken.cmc_id,
-    platforms: [],
+    platforms:
+      dbToken.TokenBlockchainRecords?.map((t) => ({
+        address: t.address,
+        coingecko_slug: t.blockchain_coingecko_slug,
+      })) || [],
     statistics: {
       price: dbToken.price,
+      priceBtc: dbToken.price_btc,
+      priceEth: dbToken.price_eth,
+      priceBtcChangePercentage24h: dbToken.price_change_btc_perc_24h,
+      priceEthChangePercentage24h: dbToken.price_change_eth_perc_24h,
       priceChangePercentage1h: dbToken.price_change_perc_1h,
       priceChangePercentage24h: dbToken.price_change_perc_24h,
       priceChangePercentage7d: dbToken.price_change_perc_7d,
@@ -98,4 +107,79 @@ export function mapDbTokenToResponse(
         dbToken.fully_diluted_market_cap_change_perc_24h,
     },
   };
+}
+
+export async function getSelectTokensQuery(
+  prismaClient: PrismaClient,
+  type: TokensSortBy,
+  sortOrder: TokensSortOrder,
+  limit: number,
+  offset: number
+  // search: string
+): Promise<Token[]> {
+  if (type === TokensSortBy.price) {
+    return prismaClient.$queryRawUnsafe<Token[]>(
+      `SELECT * FROM "Token" ORDER BY cast("Token".price as double precision) ${sortOrder} LIMIT ${limit} OFFSET ${offset}`
+    );
+  }
+
+  if (type === TokensSortBy.circulatingSupply) {
+    return prismaClient.$queryRawUnsafe<Token[]>(
+      `SELECT * FROM "Token" ORDER BY cast("Token".circulating_supply as double precision) ${sortOrder} LIMIT ${limit} OFFSET ${offset}`
+    );
+  }
+
+  if (type === TokensSortBy.volume) {
+    return prismaClient.$queryRawUnsafe<Token[]>(
+      `SELECT * FROM "Token" ORDER BY cast("Token".volume as double precision) ${sortOrder} LIMIT ${limit} OFFSET ${offset}`
+    );
+  }
+
+  if (type === TokensSortBy.symbol) {
+    return prismaClient.token.findMany({
+      take: limit,
+      orderBy: {
+        symbol: sortOrder,
+      },
+      skip: offset,
+    });
+  }
+
+  if (type === TokensSortBy.volumeChangePercentage24h) {
+    return prismaClient.token.findMany({
+      take: limit,
+      orderBy: {
+        volume_change_perc_24h: sortOrder,
+      },
+      skip: offset,
+    });
+  }
+
+  if (type === TokensSortBy.priceChangePercentage1h) {
+    return prismaClient.token.findMany({
+      take: limit,
+      orderBy: {
+        price_change_perc_1h: sortOrder,
+      },
+      skip: offset,
+    });
+  }
+
+  if (type === TokensSortBy.priceChangePercentage24h) {
+    return prismaClient.token.findMany({
+      take: limit,
+      orderBy: {
+        price_change_perc_24h: sortOrder,
+      },
+      skip: offset,
+    });
+  }
+
+  return prismaClient.token.findMany({
+    take: limit,
+    orderBy: {
+      market_cap_rank: sortOrder,
+    },
+    skip: offset,
+  });
 }
