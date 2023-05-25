@@ -57,8 +57,8 @@ export type CoinGeckoStatsResponse = {
   name: string;
   image: string;
   current_price: number;
-  market_cap: number;
-  market_cap_rank: number;
+  market_cap?: number;
+  market_cap_rank?: number;
   fully_diluted_valuation?: number;
   total_volume: number;
   high_24h?: number;
@@ -141,3 +141,15 @@ interface SwapsStats {
   buy_swaps_count: number;
   sell_swaps_count: number;
 }
+
+export type PricesStatsResponse = Record<
+  string,
+  {
+    usd: number;
+    usd_24h_change: number;
+    btc: number;
+    btc_24h_change: number;
+    eth: number;
+    eth_24h_change: number;
+  }
+>;

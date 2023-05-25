@@ -88,6 +88,10 @@ export function mapDbTokenToResponse(
       })) || [],
     statistics: {
       price: dbToken.price,
+      priceBtc: dbToken.price_btc,
+      priceEth: dbToken.price_eth,
+      priceBtcChangePercentage24h: dbToken.price_change_btc_perc_24h,
+      priceEthChangePercentage24h: dbToken.price_change_eth_perc_24h,
       priceChangePercentage1h: dbToken.price_change_perc_1h,
       priceChangePercentage24h: dbToken.price_change_perc_24h,
       priceChangePercentage7d: dbToken.price_change_perc_7d,
@@ -171,7 +175,11 @@ export async function getSelectTokensQuery(
     });
   }
 
-  return prismaClient.$queryRawUnsafe<Token[]>(
-    `SELECT * FROM "Token" ORDER BY cast("Token".market_cap as double precision) ${sortOrder} LIMIT ${limit} OFFSET ${offset}`
-  );
+  return prismaClient.token.findMany({
+    take: limit,
+    orderBy: {
+      market_cap_rank: sortOrder,
+    },
+    skip: offset,
+  });
 }

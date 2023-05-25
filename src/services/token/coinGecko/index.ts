@@ -1,12 +1,14 @@
 import got from 'got';
 import pThrottle from 'p-throttle';
 
+import { chunk, merge } from 'lodash-es';
 import {
   CoinGeckoExchangesResponse,
   CoinGeckoStatsResponse,
   CoinsListResponse,
   CoinsPairsResponse,
   PoolStatsResponse,
+  PricesStatsResponse,
 } from './types';
 
 export async function getCoinGeckoCoins(): Promise<CoinsListResponse> {
@@ -25,7 +27,7 @@ export const getCoinGeckoPairs = pThrottle({ limit: 1, interval: 1000 })(
   ): Promise<CoinsPairsResponse> => {
     const { body } = await got.get<CoinsPairsResponse>(
       `https://api.geckoterminal.com/api/v2/networks/${coinGeckoNetwork}/tokens/${tokenAddress}/pools`,
-      { responseType: 'json' }
+      { responseType: 'json', timeout: 3000 }
     );
 
     return body;
@@ -78,6 +80,35 @@ export async function getCoinGeckoCoinsWithStats(
   return responses.flat();
 }
 
+const throttledCoinGeckoPrices = pThrottle({ interval: 10 * 1000, limit: 1 })(
+  async (ids: string[]) => {
+    const { body } = await got.get<PricesStatsResponse>(
+      'https://api.coingecko.com/api/v3/simple/price',
+      {
+        timeout: 10000,
+        searchParams: {
+          ids: ids.join(','),
+          vs_currencies: 'usd,btc,eth',
+          include_24hr_change: true,
+        },
+        responseType: 'json',
+      }
+    );
+    return body;
+  }
+);
+
+export async function getCoinGeckoCoinsPrices(
+  ids: string[]
+): Promise<PricesStatsResponse> {
+  const responses = await Promise.all(
+    chunk(ids, PER_PAGE).map(throttledCoinGeckoPrices)
+  );
+
+  /* @ts-ignore */
+  return merge(...responses);
+}
+
 export async function getPoolInfo(
   coinGeckoNetwork: string,
   poolAddress: string,
@@ -89,6 +120,7 @@ export async function getPoolInfo(
       {
         responseType: 'json',
         searchParams: { base_token: baseToken },
+        timeout: 3000,
       }
     );
 
@@ -100,9 +132,10 @@ export async function getPoolInfo(
       volume: body.data.attributes.historical_data.last_24h.volume_in_usd,
       liquidity: body.data.attributes.reserve_in_usd,
       price: body.data.attributes.price_in_usd,
-      priceChangePercentage24h: Number.parseFloat(
-        body.data.attributes.price_percent_changes.last_24h.slice(0, -1)
-      ),
+      priceChangePercentage24h:
+        Number.parseFloat(
+          body.data.attributes.price_percent_changes.last_24h.slice(0, -1)
+        ) || 0,
     };
   } catch {
     throw new Error(

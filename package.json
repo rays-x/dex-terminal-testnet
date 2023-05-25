@@ -40,6 +40,7 @@
     "@payloadcms/plugin-seo": "1.0.8",
     "@prisma/client": "4.13.0",
     "@stigma.io/nestjs-oraq": "^0.2.5",
+    "async-lock": "1.4.0",
     "bcrypt": "5.0.1",
     "bignumber.js": "9.1.1",
     "body-parser": "^1.20.1",
@@ -70,6 +71,7 @@
   "devDependencies": {
     "@bleed-believer/path-alias": "^0.14.0",
     "@darraghor/eslint-plugin-nestjs-typed": "^3.20.5",
+    "@types/async-lock": "^1.4.0",
     "@types/connect-redis": "0.0.18",
     "@types/cookie-parser": "^1.4.3",
     "@types/cors": "2.8.12",

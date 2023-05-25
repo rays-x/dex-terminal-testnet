@@ -6,7 +6,7 @@ const BQ_API_KEY = 'BQYDrGIlYKPdXIlxkRZmJtwKKvCtrS4X';
 export interface UniqueSendersResponse {
   data: {
     ethereum: {
-      dexTrades: {
+      dexTrades?: {
         date: {
           date: string;
         };
@@ -62,7 +62,7 @@ export async function countUniqueSenders(
   );
 
   return Number.parseInt(
-    response.body.data.ethereum.dexTrades[0].senders || '0',
+    response.body.data.ethereum.dexTrades?.[0]?.senders || '0',
     10
   );
 }

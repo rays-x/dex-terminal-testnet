@@ -21,7 +21,12 @@ model Token {
     price_change_perc_1h                     Float?
     price_change_perc_24h                    Float?
     price_change_perc_7d                     Float?
+    price_btc                                String                  @default("0")
+    price_eth                                String                  @default("0")
+    price_change_btc_perc_24h                Float                   @default(0)
+    price_change_eth_perc_24h                Float                   @default(0)
     market_cap                               String?
+    market_cap_rank                          Int?
     market_cap_change_perc_24h               Float?
     fully_diluted_market_cap                 String?
     fully_diluted_market_cap_change_perc_24h Float?
@@ -31,9 +36,11 @@ model Token {
     volume                                   String?
     volume_change_perc_24h                   Float?
     TokenBlockchainRecords                   TokenBlockchainRecord[]
+    last_updated                             DateTime                @default(now()) @updatedAt()
 
     @@index([coingecko_slug])
     @@index([symbol])
+    @@index([market_cap_rank])
 }
 
 model Blockchain {
@@ -76,9 +83,9 @@ model ExchangePair {
     unique_sellers_count                  Int
     reserve_in_usd                        String
     exchange_coingecko_slug               String
-    BaseTokenBlockchainRecord             TokenBlockchainRecord @relation(name: "base_token_blockchain_record", fields: [base_token_blockchain_slug, base_token_blockchain_record_address], references: [blockchain_coingecko_slug, address])
-    QuoteTokenBlockchainRecord            TokenBlockchainRecord @relation(name: "quote_token_blockchain_record", fields: [quote_token_blockchain_slug, quote_token_blockchain_record_address], references: [blockchain_coingecko_slug, address])
-    Exchange                              Exchange              @relation(fields: [exchange_coingecko_slug], references: [coingecko_slug])
+    BaseTokenBlockchainRecord             TokenBlockchainRecord @relation(name: "base_token_blockchain_record", fields: [base_token_blockchain_slug, base_token_blockchain_record_address], references: [blockchain_coingecko_slug, address], onDelete: Cascade)
+    QuoteTokenBlockchainRecord            TokenBlockchainRecord @relation(name: "quote_token_blockchain_record", fields: [quote_token_blockchain_slug, quote_token_blockchain_record_address], references: [blockchain_coingecko_slug, address], onDelete: Cascade)
+    Exchange                              Exchange              @relation(fields: [exchange_coingecko_slug], references: [coingecko_slug], onDelete: Cascade)
     base_token_blockchain_record_address  String
     quote_token_blockchain_record_address String
     base_token_blockchain_slug            String
@@ -103,7 +110,7 @@ model Exchange {
     blockchain_id  Int
     Type           ExchangeType
     ExchangePair   ExchangePair[]
-    Blockchain     Blockchain     @relation(fields: [blockchain_id], references: [id])
+    Blockchain     Blockchain     @relation(fields: [blockchain_id], references: [id], onDelete: Cascade)
 
     @@index([coingecko_slug])
 }

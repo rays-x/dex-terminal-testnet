@@ -1,5 +1,6 @@
 import { get, invert } from 'lodash-es';
 import Redis from 'ioredis';
+import AsyncLock from 'async-lock';
 import { HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { InjectRedis } from '@liaoliaots/nestjs-redis';
 import { ExchangeType } from 'generated/client';
@@ -12,6 +13,7 @@ import { CmcToken } from '../coinMarketCapScraper/types';
 import { getSelectTokensQuery, mapDbTokenToResponse } from './helpers';
 import {
   getCoinGeckoCoins,
+  getCoinGeckoCoinsPrices,
   getCoinGeckoCoinsWithStats,
   getCoinGeckoExchanges,
   getCoinGeckoPairs,
@@ -19,8 +21,8 @@ import {
 } from './coinGecko';
 import { countUniqueSenders } from './bitQuery';
 
-const TOKEN_LIMIT = 1000;
-const PAIRS_LIMIT = 100;
+const TOKEN_LIMIT = 200;
+const PAIRS_LIMIT = 10;
 
 const POSTGRES_TX_TIMEOUT = 60 * 1000;
 
@@ -35,6 +37,10 @@ const bitQueryNetworksMapper = {
 };
 
 const invertedCoingeckoNetworksMapper = invert(coingeckoNetworksMapper);
+
+const asyncLock = new AsyncLock({
+  maxOccupationTime: 60 * 1000,
+});
 
 @Injectable()
 export class TokenService {
@@ -95,16 +101,77 @@ export class TokenService {
     { limit }: NewQueryTokensDto
   ): Promise<unknown> {
     const parsedId = Number.parseInt(id, 10);
+    const parsedLimit = Number.parseInt(limit, 10);
 
-    const pairs = await this.prisma.exchangePair.findMany({
+    return asyncLock.acquire(id, async () => {
+      const isOutdated = await this.prisma.token.count({
+        where: {
+          id: parsedId,
+          last_updated: { lt: new Date(Date.now() - 5 * 60 * 1000) },
+        },
+      });
+
+      if (isOutdated) {
+        await this.syncPairs([parsedId]);
+      }
+
+      const pairs = await this.getPair(parsedId, parsedLimit);
+
+      return {
+        items: pairs.map((pair) => ({
+          base: {
+            id: pair.BaseTokenBlockchainRecord.Token?.id || '',
+            slug: pair.BaseTokenBlockchainRecord.Token?.coingecko_slug || '',
+            symbol:
+              pair.BaseTokenBlockchainRecord.Token?.symbol.toUpperCase() || '',
+            address: pair.BaseTokenBlockchainRecord.address,
+            image: '',
+          },
+          quote: {
+            id: pair.QuoteTokenBlockchainRecord.Token?.id || '',
+            slug: pair.QuoteTokenBlockchainRecord.Token?.coingecko_slug || '',
+            symbol:
+              pair.QuoteTokenBlockchainRecord.Token?.symbol.toUpperCase() || '',
+            address: pair.QuoteTokenBlockchainRecord.address,
+            image: '',
+          },
+          platform: {
+            id: pair.Exchange.Blockchain.id,
+            chainId: pair.Exchange.Blockchain.evm_chain_id,
+            dexerTxHashFormat: pair.Exchange.Blockchain.explorer_tx_url_format,
+          },
+          dex: {
+            id: pair.Exchange.id,
+            name: pair.Exchange.name,
+          },
+          reverseOrder: false,
+          coingeckoPoolId: pair.coingecko_pool_id,
+          name: pair.pool_name,
+          volume: pair.volume,
+          liquidity: pair.reserve_in_usd,
+          price: pair.price,
+          priceChangePerc24h: pair.price_change_perc_24h,
+          tradesCount: pair.trades_count,
+          sellsCount: pair.sells_count,
+          buysCount: pair.buys_count,
+          buyersCount: pair.unique_buyers_count,
+          sellersCount: pair.unique_sellers_count,
+        })),
+        count: pairs.length,
+      };
+    });
+  }
+
+  private async getPair(id: number, limit: number) {
+    return this.prisma.exchangePair.findMany({
       where: {
         OR: [
-          { BaseTokenBlockchainRecord: { Token: { id: parsedId } } },
-          { QuoteTokenBlockchainRecord: { Token: { id: parsedId } } },
+          { BaseTokenBlockchainRecord: { Token: { id } } },
+          { QuoteTokenBlockchainRecord: { Token: { id } } },
         ],
       },
       orderBy: { reserve_in_usd: 'desc' },
-      take: Number.parseInt(limit, 10),
+      take: limit,
       include: {
         BaseTokenBlockchainRecord: {
           include: {
@@ -121,139 +188,119 @@ export class TokenService {
         },
       },
     });
-
-    return {
-      items: pairs.map((pair) => ({
-        base: {
-          id: pair.BaseTokenBlockchainRecord.Token?.id || '',
-          slug: pair.BaseTokenBlockchainRecord.Token?.coingecko_slug || '',
-          symbol:
-            pair.BaseTokenBlockchainRecord.Token?.symbol.toUpperCase() || '',
-          address: pair.BaseTokenBlockchainRecord.address,
-          image: '',
-        },
-        quote: {
-          id: pair.QuoteTokenBlockchainRecord.Token?.id || '',
-          slug: pair.QuoteTokenBlockchainRecord.Token?.coingecko_slug || '',
-          symbol:
-            pair.QuoteTokenBlockchainRecord.Token?.symbol.toUpperCase() || '',
-          address: pair.QuoteTokenBlockchainRecord.address,
-          image: '',
-        },
-        platform: {
-          id: pair.Exchange.Blockchain.id,
-          chainId: pair.Exchange.Blockchain.evm_chain_id,
-          dexerTxHashFormat: pair.Exchange.Blockchain.explorer_tx_url_format,
-        },
-        dex: {
-          id: pair.Exchange.id,
-          name: pair.Exchange.name,
-        },
-        reverseOrder: false,
-        coingeckoPoolId: pair.coingecko_pool_id,
-        name: pair.pool_name,
-        volume: pair.volume,
-        liquidity: pair.reserve_in_usd,
-        price: pair.price,
-        priceChangePerc24h: pair.price_change_perc_24h,
-        tradesCount: pair.trades_count,
-        sellsCount: pair.sells_count,
-        buysCount: pair.buys_count,
-        buyersCount: pair.unique_buyers_count,
-        sellersCount: pair.unique_sellers_count,
-      })),
-      count: pairs.length,
-    };
   }
 
   private async syncTokens() {
     Logger.debug(`syncTokens start`);
 
+    const availableBlockchainsSet = new Set(
+      Object.keys(coingeckoNetworksMapper)
+    );
+
+    const coingGeckoTokens = await getCoinGeckoCoins();
+    const coingGeckoTokensWithPlatforms = coingGeckoTokens.filter(
+      ({ platforms }) =>
+        platforms &&
+        Object.keys(platforms).some((platform) =>
+          availableBlockchainsSet.has(platform)
+        )
+    );
+
+    const coingGeckoTokensMap = new Map(
+      coingGeckoTokensWithPlatforms.map((token) => [token.id, token])
+    );
+
+    const coinGeckoStats = await getCoinGeckoCoinsWithStats(TOKEN_LIMIT);
+
+    const coinGeckoPrices = await getCoinGeckoCoinsPrices(
+      coinGeckoStats.map(({ id }) => id)
+    );
+
     await this.prisma.$transaction(
       async (txClient) => {
-        const coingGeckoTokens = await getCoinGeckoCoins();
-        const coingGeckoTokensMap = new Map(
-          coingGeckoTokens.map((token) => [token.id.toLowerCase(), token])
-        );
-
-        const coinGeckoStats = await getCoinGeckoCoinsWithStats(TOKEN_LIMIT);
-
-        await txClient.token.deleteMany({
-          where: {
-            coingecko_slug: {
-              notIn: coinGeckoStats.map(({ id }) => id),
-            },
-          },
-        });
-
-        const availableBlockchainsSet = new Set(
-          Object.keys(coingeckoNetworksMapper)
-        );
+        await txClient.token.deleteMany({});
 
         await Promise.all(
-          coinGeckoStats.map(async (stat) => {
-            const { platforms } =
-              coingGeckoTokensMap.get(stat.id.toLowerCase()) || {};
+          coinGeckoStats
+            .filter(
+              ({ current_price, market_cap }) =>
+                current_price > 0 && +market_cap > 0
+            )
+            .map(async (stat) => {
+              const { platforms } = coingGeckoTokensMap.get(stat.id) || {};
 
-            if (!platforms || !Object.keys(platforms).length) {
-              return;
-            }
+              if (!Object.keys(platforms || {}).length) {
+                return;
+              }
 
-            const tokenInfo = {
-              symbol: stat.symbol,
-              name: stat.name,
-              launched_date: stat.atl_date,
-              image: stat.image,
-              description: '',
-              category: '',
-              price: stat.current_price?.toString() || '0',
-              price_change_perc_1h: stat.price_change_percentage_1h_in_currency,
-              price_change_perc_24h: stat.price_change_24h,
-              price_change_perc_7d: stat.price_change_percentage_7d_in_currency,
-              market_cap: stat.market_cap?.toString(),
-              market_cap_change_perc_24h: stat.market_cap_change_24h,
-              fully_diluted_market_cap:
-                stat.fully_diluted_valuation?.toString(),
-              fully_diluted_market_cap_change_perc_24h: 0,
-              circulating_supply: stat.circulating_supply?.toString(),
-              total_supply: stat.total_supply?.toString(),
-              self_reported_circulating_supply: '0',
-              volume: stat.total_volume?.toString(),
-              volume_change_perc_24h: 0,
-            };
+              const prices = coinGeckoPrices[stat.id];
 
-            await txClient.token.upsert({
-              where: { coingecko_slug: stat.id },
-              create: {
-                ...tokenInfo,
-                coingecko_slug: stat.id,
-                TokenBlockchainRecords: {
-                  connectOrCreate: Object.entries(platforms)
-                    .filter(([k]) => availableBlockchainsSet.has(k))
-                    .map(([slug, address]) => {
-                      const createOpts = {
-                        address,
-                        blockchain_coingecko_slug: slug,
-                      };
+              if (!prices) {
+                throw new Error(`Prices for ${stat.symbol} not found`);
+              }
 
-                      return {
-                        where: {
-                          blockchain_coingecko_slug_address: createOpts,
-                        },
-                        create: createOpts,
-                      };
-                    }),
+              const tokenInfo = {
+                symbol: stat.symbol,
+                name: stat.name,
+                launched_date: stat.atl_date,
+                image: stat.image,
+                description: '',
+                category: '',
+                price_btc: prices.btc?.toString() || '0',
+                price_eth: prices.eth?.toString() || '0',
+                price_change_btc_perc_24h: prices.btc_24h_change || 0,
+                price_change_eth_perc_24h: prices.eth_24h_change || 0,
+                price: stat.current_price?.toString() || '0',
+                price_change_perc_1h:
+                  stat.price_change_percentage_1h_in_currency,
+                price_change_perc_24h: stat.price_change_24h,
+                price_change_perc_7d:
+                  stat.price_change_percentage_7d_in_currency,
+                market_cap: stat.market_cap?.toString() || '0',
+                market_cap_rank: stat.market_cap_rank,
+                market_cap_change_perc_24h: stat.market_cap_change_24h,
+                fully_diluted_market_cap:
+                  stat.fully_diluted_valuation?.toString(),
+                fully_diluted_market_cap_change_perc_24h: 0,
+                circulating_supply: stat.circulating_supply?.toString(),
+                total_supply: stat.total_supply?.toString(),
+                self_reported_circulating_supply: '0',
+                volume: stat.total_volume?.toString(),
+                volume_change_perc_24h: 0,
+              };
+
+              await txClient.token.upsert({
+                where: { coingecko_slug: stat.id },
+                create: {
+                  ...tokenInfo,
+                  coingecko_slug: stat.id,
+                  TokenBlockchainRecords: {
+                    connectOrCreate: Object.entries(platforms)
+                      .filter(([k]) => availableBlockchainsSet.has(k))
+                      .map(([slug, address]) => {
+                        const createOpts = {
+                          address,
+                          blockchain_coingecko_slug: slug,
+                        };
+
+                        return {
+                          where: {
+                            blockchain_coingecko_slug_address: createOpts,
+                          },
+                          create: createOpts,
+                        };
+                      }),
+                  },
                 },
-              },
-              update: tokenInfo,
-              select: null,
-            });
+                update: tokenInfo,
+                select: null,
+              });
 
-            Logger.debug(`syncTokens synced ${stat.symbol}`);
-          })
+              Logger.debug(`syncTokens synced ${stat.symbol}`);
+            })
         );
       },
-      { timeout: POSTGRES_TX_TIMEOUT * 5 }
+      { timeout: POSTGRES_TX_TIMEOUT }
     );
 
     Logger.debug(`syncTokens done`);
@@ -340,28 +387,29 @@ export class TokenService {
     Logger.debug(`syncDexs done`);
   }
 
-  private async syncPairs() {
+  private async syncPairs(ids?: number[]) {
     Logger.debug(`syncPairs start`);
 
     const isoTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
     const tokens = await this.prisma.token.findMany({
       include: { TokenBlockchainRecords: true },
+      take: PAIRS_LIMIT,
+      orderBy: {
+        market_cap_rank: 'asc',
+      },
+      where: ids?.length ? { id: { in: ids } } : undefined,
     });
 
     await this.prisma.exchangePair.deleteMany({});
 
-    for (let i = 0; i < PAIRS_LIMIT; i++) {
+    for (let i = 0; i < tokens.length; i++) {
       const token = tokens[i];
 
       let pairsSynced = 0;
 
       await this.prisma.$transaction(
         async (txClient) => {
-          if (!token.TokenBlockchainRecords.length) {
-            return;
-          }
-
           await Promise.all(
             token.TokenBlockchainRecords.map(async (network) => {
               try {
@@ -514,6 +562,11 @@ export class TokenService {
               }
             })
           );
+
+          await this.prisma.token.update({
+            where: { id: token.id },
+            data: { last_updated: new Date() },
+          });
         },
         { maxWait: 60000, timeout: POSTGRES_TX_TIMEOUT * 4 }
       );
