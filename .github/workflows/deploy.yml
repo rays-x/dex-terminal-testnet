@@ -24,7 +24,7 @@ jobs:
       - name: Install dependencies
         run: yarn install
       - name: Build
-        run: yarn action
+        run: yarn build:server
         env:
           NODE_ENV: production
           VITE_BACKEND_URL: https://stage.ray.sx/api/rest
