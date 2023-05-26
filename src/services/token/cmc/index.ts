@@ -19,7 +19,7 @@ const CMC_IDS_PER_REQ = 500;
 
 const COINGECKO_PAGES = 5;
 
-export async function getCmcTokens(): Promise<[string, CmcCoin][]> {
+export async function getCmcTokens(): Promise<CmcCoin[]> {
   const { fields, values } = await req<CPCCoinsResponse>(
     'https://s3.coinmarketcap.com/generated/core/crypto/cryptos.json',
     { responseType: 'json' }
@@ -33,17 +33,15 @@ export async function getCmcTokens(): Promise<[string, CmcCoin][]> {
   const isActiveIndex = fields.indexOf('is_active');
   const rankIndex = fields.indexOf('rank');
 
-  return values.map((value) => [
-    value[idIndex],
-    {
-      name: value[nameIndex],
-      slug: value[slugIndex],
-      symbol: value[symbolIndex],
-      contracts: value[addressIndex],
-      isActive: Boolean(value[isActiveIndex]),
-      rank: value[rankIndex],
-    },
-  ]);
+  return values.map((value) => ({
+    id: value[idIndex],
+    name: value[nameIndex],
+    slug: value[slugIndex],
+    symbol: value[symbolIndex],
+    contracts: value[addressIndex],
+    isActive: Boolean(value[isActiveIndex]),
+    rank: value[rankIndex],
+  }));
 }
 
 export async function getPancakeswapTokenContracts(): Promise<string[]> {
@@ -74,33 +72,31 @@ export async function getUniswapTokenContracts(): Promise<string[]> {
   return tokens.map(({ address }) => address).filter(Boolean);
 }
 
+const throttledLatestStats = pThrottle({
+  limit: 10,
+  interval: 30 * 1000,
+})(async (_ids: string[]) => {
+  const { status, data } = await req<CmcStatsResponse>(
+    'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest',
+    {
+      responseType: 'json',
+      searchParams: { id: _ids.join(',') },
+      headers: { 'X-CMC_PRO_API_KEY': CMC_API_KEY },
+    }
+  );
+
+  if (status.error_code || !data) {
+    throw new Error(status.error_message);
+  }
+
+  return data;
+});
+
 export async function getCmcStats(
   ids: (number | string)[]
 ): Promise<Record<string, CmcStats>> {
-  const throttle = pThrottle({
-    limit: 1,
-    interval: 2000,
-  });
-
-  const throttled = throttle(async (_ids: string[]) => {
-    const { status, data } = await req<CmcStatsResponse>(
-      'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest',
-      {
-        responseType: 'json',
-        searchParams: { id: _ids.join(',') },
-        headers: { 'X-CMC_PRO_API_KEY': CMC_API_KEY },
-      }
-    );
-
-    if (status.error_code || !data) {
-      throw new Error(status.error_message);
-    }
-
-    return data;
-  });
-
   const responses = await Promise.all(
-    chunk(ids, CMC_IDS_PER_REQ).map(throttled)
+    chunk(ids, CMC_IDS_PER_REQ).map(throttledLatestStats)
   );
 
   return responses.reduce((m, res) => ({ ...m, ...res }), {});

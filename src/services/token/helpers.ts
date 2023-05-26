@@ -1,12 +1,18 @@
 import got from 'got';
 
-import { PrismaClient, Token, TokenBlockchainRecord } from 'generated/client';
-import { CmcToken } from 'services/coinMarketCapScraper/types';
+import {
+  Blockchain,
+  PrismaClient,
+  Token,
+  TokenBlockchainRecord,
+} from 'generated/client';
+import { CmcToken } from 'services/token/cmc/types';
 import { TokensSortBy, TokensSortOrder } from 'dto/coinMarketCapScraper';
 import { TokenExchangeResponse } from '../../types/Token/TokenExchangeResponse';
 import { MarketPairResponse } from '../../types/Token/TokenCMCPairResponse';
 import { TokenCMCPlatformsResponse } from '../../types/Token/TokenCMCPlatformsResponse';
 import { CMC_USER_AGENT } from '../../constants';
+import { bitQueryNetworksMapper } from './bitQuery';
 
 export async function getPlatformsData(): Promise<
   TokenCMCPlatformsResponse['data']
@@ -62,12 +68,15 @@ export async function getExchangePairs(
 
 export function mapDbTokenToResponse(
   dbToken: Token & {
-    TokenBlockchainRecords: TokenBlockchainRecord[];
+    TokenBlockchainRecords: (TokenBlockchainRecord & {
+      Blockchain: Blockchain;
+    })[];
   }
 ): CmcToken & { platforms: unknown[]; statistics: unknown } {
   return {
     id: dbToken.id.toString(),
     slug: dbToken.coingecko_slug,
+    cmcSlug: dbToken.cmc_slug,
     name: dbToken.name,
     symbol: dbToken.symbol.toUpperCase(),
     logoURI: dbToken.image || '',
@@ -84,7 +93,15 @@ export function mapDbTokenToResponse(
     platforms:
       dbToken.TokenBlockchainRecords?.map((t) => ({
         address: t.address,
-        coingecko_slug: t.blockchain_coingecko_slug,
+        blockchain: {
+          name: t.Blockchain.name,
+          image: t.Blockchain.image,
+          url: t.Blockchain.explorer_token_url_format.replace(
+            ':address',
+            t.address
+          ),
+          bqSlug: bitQueryNetworksMapper[t.Blockchain.coingecko_slug],
+        },
       })) || [],
     statistics: {
       price: dbToken.price,
@@ -114,8 +131,9 @@ export async function getSelectTokensQuery(
   type: TokensSortBy,
   sortOrder: TokensSortOrder,
   limit: number,
-  offset: number
-  // search: string
+  offset: number,
+  chains: string[],
+  search: string
 ): Promise<Token[]> {
   if (type === TokensSortBy.price) {
     return prismaClient.$queryRawUnsafe<Token[]>(
@@ -135,8 +153,48 @@ export async function getSelectTokensQuery(
     );
   }
 
+  const chainQuery = chains.length
+    ? {
+        TokenBlockchainRecords: {
+          some: { blockchain_coingecko_slug: { in: chains } },
+        },
+      }
+    : {};
+
+  const searchQuery = search.length
+    ? {
+        OR: [
+          { symbol: { contains: search } },
+          { name: { contains: search } },
+          {
+            TokenBlockchainRecords: {
+              some: {
+                OR: [
+                  { address: { contains: search } },
+                  {
+                    QuoteExchangePair: {
+                      some: { coingecko_pool_id: { contains: search } },
+                    },
+                  },
+                  {
+                    BaseExchangePair: {
+                      some: { coingecko_pool_id: { contains: search } },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      }
+    : {};
+
   if (type === TokensSortBy.symbol) {
     return prismaClient.token.findMany({
+      where: {
+        ...chainQuery,
+        ...searchQuery,
+      },
       take: limit,
       orderBy: {
         symbol: sortOrder,
@@ -147,6 +205,10 @@ export async function getSelectTokensQuery(
 
   if (type === TokensSortBy.volumeChangePercentage24h) {
     return prismaClient.token.findMany({
+      where: {
+        ...chainQuery,
+        ...searchQuery,
+      },
       take: limit,
       orderBy: {
         volume_change_perc_24h: sortOrder,
@@ -157,6 +219,10 @@ export async function getSelectTokensQuery(
 
   if (type === TokensSortBy.priceChangePercentage1h) {
     return prismaClient.token.findMany({
+      where: {
+        ...chainQuery,
+        ...searchQuery,
+      },
       take: limit,
       orderBy: {
         price_change_perc_1h: sortOrder,
@@ -167,6 +233,10 @@ export async function getSelectTokensQuery(
 
   if (type === TokensSortBy.priceChangePercentage24h) {
     return prismaClient.token.findMany({
+      where: {
+        ...chainQuery,
+        ...searchQuery,
+      },
       take: limit,
       orderBy: {
         price_change_perc_24h: sortOrder,
@@ -176,9 +246,16 @@ export async function getSelectTokensQuery(
   }
 
   return prismaClient.token.findMany({
+    where: {
+      ...chainQuery,
+      ...searchQuery,
+    },
     take: limit,
     orderBy: {
-      market_cap_rank: sortOrder,
+      market_cap_rank:
+        sortOrder === TokensSortOrder.asc
+          ? TokensSortOrder.desc
+          : TokensSortOrder.asc,
     },
     skip: offset,
   });

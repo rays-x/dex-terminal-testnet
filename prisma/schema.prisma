@@ -11,6 +11,7 @@ datasource db {
 model Token {
     id                                       Int                     @id @default(autoincrement())
     coingecko_slug                           String                  @unique
+    cmc_slug                                 String?                 @unique
     image                                    String?
     launched_date                            DateTime
     name                                     String
@@ -47,6 +48,7 @@ model Blockchain {
     id                        Int                     @id @default(autoincrement())
     coingecko_slug            String                  @unique
     name                      String
+    image                     String?
     evm_chain_id              Int?
     explorer_tx_url_format    String?
     explorer_addr_url_format  String?

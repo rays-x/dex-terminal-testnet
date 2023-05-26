@@ -12,6 +12,7 @@ export interface CmcUniswapTokensResponse {
 export type CmcToken = {
   id: string;
   slug: string;
+  cmcSlug?: string;
   name: string;
   symbol: string;
   logoURI: string;
@@ -155,6 +156,7 @@ export interface CPCCoinsResponse {
 }
 
 export interface CmcCoin {
+  id: number;
   name: string;
   rank: number;
   slug: string;
