@@ -1,23 +1,11 @@
-import pAll from 'p-all';
 import pThrottle from 'p-throttle';
 
 import { req } from 'helpers/proxyRequest';
 import { chunk } from 'lodash-es';
-import {
-  CPCCoinsResponse,
-  CmcStats,
-  CmcStatsResponse,
-  CoinGeckoTokens,
-  CmcCoin,
-  CmcCoinWithStats,
-  CmcUniswapTokensResponse,
-  HasValidCmcQuote,
-} from './types';
+import { CPCCoinsResponse, CmcStats, CmcStatsResponse, CmcCoin } from './types';
 
-const CMC_API_KEY = '9365749c-5395-452c-9ab7-c87ceccb64eb';
-const CMC_IDS_PER_REQ = 500;
-
-const COINGECKO_PAGES = 5;
+const { CMC_API_KEY } = process.env;
+const CMC_IDS_PER_REQ = Number.parseInt(process.env.CMC_IDS_PER_REQ, 10);
 
 export async function getCmcTokens(): Promise<CmcCoin[]> {
   const { fields, values } = await req<CPCCoinsResponse>(
@@ -42,34 +30,6 @@ export async function getCmcTokens(): Promise<CmcCoin[]> {
     isActive: Boolean(value[isActiveIndex]),
     rank: value[rankIndex],
   }));
-}
-
-export async function getPancakeswapTokenContracts(): Promise<string[]> {
-  const pages = await pAll(
-    Array.from({ length: COINGECKO_PAGES }, (_, i) => i + 1).map(
-      (page) => async () =>
-        req<CoinGeckoTokens>(
-          'https://api.coingecko.com/api/v3/exchanges/pancakeswap_new/tickers',
-          { responseType: 'json', searchParams: { page } }
-        )
-    ),
-    { concurrency: 1 }
-  );
-
-  return [
-    ...new Set(
-      pages.flatMap((page) => page.tickers.map((ticker) => ticker.base))
-    ),
-  ];
-}
-
-export async function getUniswapTokenContracts(): Promise<string[]> {
-  const { tokens } = await req<CmcUniswapTokensResponse>(
-    'https://api.coinmarketcap.com/data-api/v3/uniswap/all.json',
-    { responseType: 'json' }
-  );
-
-  return tokens.map(({ address }) => address).filter(Boolean);
 }
 
 const throttledLatestStats = pThrottle({
@@ -100,37 +60,4 @@ export async function getCmcStats(
   );
 
   return responses.reduce((m, res) => ({ ...m, ...res }), {});
-}
-
-export function isValidStats(
-  cmcTokenStats: CmcStats
-): cmcTokenStats is HasValidCmcQuote {
-  return ![
-    cmcTokenStats.quote.USD.volume_24h,
-    cmcTokenStats.quote.USD.volume_change_24h,
-    cmcTokenStats.circulating_supply,
-    cmcTokenStats.quote.USD.price,
-    cmcTokenStats.quote.USD.percent_change_1h,
-    cmcTokenStats.quote.USD.percent_change_24h,
-  ].some((v) => !v);
-}
-
-export function statsToTokenInfo(
-  tokenInfo: CmcCoin,
-  cmcTokenStats: CmcStats
-): CmcCoinWithStats {
-  return {
-    ...tokenInfo,
-    liquidity: 0,
-    volume: cmcTokenStats.quote.USD.volume_24h.toString(),
-    volumeChangePercentage24h: cmcTokenStats.quote.USD.volume_change_24h,
-    circulatingSupply: cmcTokenStats.circulating_supply.toString(),
-    marketCap:
-      cmcTokenStats.quote.USD.market_cap?.toString() ||
-      cmcTokenStats.self_reported_market_cap?.toString() ||
-      '',
-    price: cmcTokenStats.quote.USD.price.toString(),
-    priceChangePercentage1h: cmcTokenStats.quote.USD.percent_change_1h,
-    priceChangePercentage24h: cmcTokenStats.quote.USD.percent_change_24h,
-  };
 }

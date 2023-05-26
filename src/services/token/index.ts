@@ -25,14 +25,12 @@ import {
 import { bitQueryNetworksMapper, countUniqueSenders } from './bitQuery';
 import { Blockchains } from './constants';
 
-const TOKEN_LIMIT = 1000;
-const PAIRS_LIMIT = 10;
+const TOKEN_LIMIT = Number.parseInt(process.env.TOKEN_LIMIT, 10);
+const PAIRS_LIMIT = Number.parseInt(process.env.PAIRS_LIMIT, 10);
 
 const PAIRS_UPDATE_INTERVAL = 15 * 60 * 1000;
 
 const POSTGRES_TX_TIMEOUT = 60 * 1000;
-
-const MAX_PAIRS = 10;
 
 const topTokensInOrders = ['market_cap_desc', 'volume_desc'] as const;
 
@@ -541,7 +539,7 @@ export class TokenService {
                           pair.relationships.quote_token.data.id,
                         ].every((id) => cgSupportedIds.has(id))
                     )
-                    .slice(0, MAX_PAIRS)
+                    .slice(0, PAIRS_LIMIT)
                     .map(async (pair) => {
                       const [baseTokenBlockchainSlug, baseTokenAddress] =
                         pair.relationships.base_token.data.id.split('_');
