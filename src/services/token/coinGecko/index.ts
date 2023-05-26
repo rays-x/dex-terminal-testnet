@@ -119,7 +119,7 @@ export async function getCoinGeckoCoinsPrices(
   return merge(...responses);
 }
 
-export const getPoolInfo = pThrottle({ limit: 2, interval: 4000 })(
+export const getPoolInfo = pThrottle({ limit: 2, interval: 5000 })(
   async (coinGeckoNetwork: string, poolAddress: string, baseToken: number) => {
     try {
       const { body } = await got.get<PoolStatsResponse>(

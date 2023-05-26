@@ -25,14 +25,14 @@ import {
 import { bitQueryNetworksMapper, countUniqueSenders } from './bitQuery';
 import { Blockchains } from './constants';
 
-const TOKEN_LIMIT = 200;
+const TOKEN_LIMIT = 1000;
 const PAIRS_LIMIT = 10;
 
 const PAIRS_UPDATE_INTERVAL = 15 * 60 * 1000;
 
 const POSTGRES_TX_TIMEOUT = 60 * 1000;
 
-const MAX_PAIRS = 8;
+const MAX_PAIRS = 10;
 
 const topTokensInOrders = ['market_cap_desc', 'volume_desc'] as const;
 
