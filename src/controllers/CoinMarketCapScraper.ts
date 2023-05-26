@@ -17,9 +17,7 @@ import { CoinMarketCapScraperService } from 'services/coinMarketCapScraper';
 import {
   QueryPairListDto,
   QueryPairsInfoDto,
-  QueryTokensDto,
   QueryTransactionsDto,
-  TokensSortOrder,
   TransactionsResponse,
 } from '../dto/coinMarketCapScraper';
 import {
@@ -33,42 +31,6 @@ import { HttpStatusMessages } from '../messages/http';
 @Controller('/api/rest/cmc')
 export class CoinMarketCapScraperController {
   constructor(private readonly service: CoinMarketCapScraperService) {}
-
-  @Get('tokens')
-  @HttpCode(200)
-  async uniTokens(
-    @Query()
-    { networks, search, limit, offset, sortBy, sortOrder }: QueryTokensDto
-  ) {
-    const tokens = await this.service.tokens(networks);
-
-    const filteredTokens = tokens.filter((token) =>
-      search
-        ? [
-            // token.id.toLowerCase(),
-            token.name.toLowerCase(),
-            token.symbol.toLowerCase(),
-          ].find((_) => _.includes(search.toLowerCase()))
-        : true
-    );
-
-    return {
-      tokens: filteredTokens
-        .sort((a, b) =>
-          sortOrder === TokensSortOrder.asc
-            ? String(a[sortBy]).localeCompare(String(b[sortBy]), undefined, {
-                numeric: true,
-                sensitivity: 'base',
-              })
-            : String(b[sortBy]).localeCompare(String(a[sortBy]), undefined, {
-                numeric: true,
-                sensitivity: 'base',
-              })
-        )
-        .slice(Number(offset), Number(limit) + Number(offset)),
-      tokensCount: filteredTokens.length,
-    };
-  }
 
   @Post('dex/pairs-info')
   @HttpCode(200)

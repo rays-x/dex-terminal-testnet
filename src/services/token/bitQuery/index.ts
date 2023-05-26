@@ -1,5 +1,6 @@
 import got from 'got';
 import pThrottle from 'p-throttle';
+import { bitQueryNetworksMapper } from './constants';
 
 const BQ_API_KEY = 'BQYDrGIlYKPdXIlxkRZmJtwKKvCtrS4X';
 
@@ -18,7 +19,7 @@ export interface UniqueSendersResponse {
 
 const throttled = pThrottle({
   limit: 1,
-  interval: 1000,
+  interval: 500,
 })(
   async (
     network: string,
@@ -66,3 +67,5 @@ export async function countUniqueSenders(
     10
   );
 }
+
+export { bitQueryNetworksMapper };

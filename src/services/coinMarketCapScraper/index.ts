@@ -1,11 +1,10 @@
-import { get, uniqBy } from 'lodash-es';
+import { get } from 'lodash-es';
 import Redis from 'ioredis';
 import { Injectable } from '@nestjs/common';
 import md5 from 'md5';
 import { proxyRequest } from 'helpers/proxyRequest';
 import { InjectRedis } from '@liaoliaots/nestjs-redis';
-import { Logger } from '../../config/logger/api-logger';
-import { Network, TransactionsResponse } from '../../dto/coinMarketCapScraper';
+import { TransactionsResponse } from '../../dto/coinMarketCapScraper';
 import { CmcPairListResponse } from '../../types';
 import {
   CMC_ID_BTC_PLATFORM,
@@ -13,19 +12,8 @@ import {
   CMC_USER_AGENT,
   REDIS_TAG,
 } from '../../constants';
-import { CmcCoinWithStats, CmcCoins, CmcToken } from './types';
-import {
-  getCmcStats,
-  getCmcTokens,
-  getPancakeswapTokenContracts,
-  getUniswapTokenContracts,
-  isValidStats,
-  statsToTokenInfo,
-} from './helpers';
 
 const TOKEN_INFO_CACHE_TTL = 24 * 60 * 60 * 1000;
-const PANCAKESWAP_CACHE_KEY = 'cmc:getPancakeswapTokens';
-const UNISWAP_CACHE_KEY = 'cmc:getUniswapTokens';
 
 @Injectable()
 export class CoinMarketCapScraperService {
@@ -34,38 +22,6 @@ export class CoinMarketCapScraperService {
   } = {};
 
   constructor(@InjectRedis(REDIS_TAG) private readonly redisClient: Redis) {}
-
-  async tokens(
-    networks: Network[] = [Network.bsc, Network.eth]
-  ): Promise<CmcToken[]> {
-    const panTokens = networks.includes(Network.bsc)
-      ? await this.getFilteredTokens(
-          PANCAKESWAP_CACHE_KEY,
-          getPancakeswapTokenContracts
-        )
-      : {};
-
-    const uniTokens = networks.includes(Network.eth)
-      ? await this.getFilteredTokens(
-          UNISWAP_CACHE_KEY,
-          getUniswapTokenContracts
-        )
-      : {};
-
-    return uniqBy(
-      [...Object.entries(panTokens), ...Object.entries(uniTokens)],
-      0
-    ).map(([id, tokenInfo]) => ({
-      ...tokenInfo,
-      id,
-      cmcId: Number.parseInt(id, 10),
-      logoURI: `https://s2.coinmarketcap.com/static/img/coins/64x64/${id}.png`,
-      volume: Number.parseFloat(tokenInfo.volume),
-      circulatingSupply: Number.parseFloat(tokenInfo.circulatingSupply),
-      marketCap: Number.parseFloat(tokenInfo.marketCap),
-      price: Number.parseFloat(tokenInfo.price),
-    }));
-  }
 
   async pairsInfo(
     platform: string,
@@ -267,56 +223,5 @@ export class CoinMarketCapScraperService {
             return [...prev, ...filtered];
           }, [])
           .sort((a, b) => Number(b.time) - Number(a.time));
-  }
-
-  private async getFilteredTokens(
-    cacheKey: string,
-    allowedContractsMethod: () => Promise<string[]>
-  ): Promise<CmcCoins> {
-    const cache = await this.redisClient.get(cacheKey);
-
-    if (cache) {
-      const parsed = JSON.parse(cache);
-
-      if (Object.keys(parsed).length) {
-        return parsed;
-      }
-    }
-
-    Logger.debug(`waiting for: ${cacheKey}...`);
-
-    const allowedContracts = await allowedContractsMethod();
-
-    const uniTokenContractsSet = new Set(
-      allowedContracts.map((contract) => contract.toLowerCase())
-    );
-
-    const cmcTokens = await getCmcTokens();
-
-    const uniTokens = cmcTokens.filter(([, slug]) =>
-      slug.contracts.some((contract) => uniTokenContractsSet.has(contract))
-    );
-
-    const cmcTokenStats = await getCmcStats(uniTokens.map(([id]) => id));
-
-    const uniTokensWithStats = Object.fromEntries<CmcCoinWithStats>(
-      uniTokens
-        .filter(
-          ([id]) => !!cmcTokenStats[id] && isValidStats(cmcTokenStats[id])
-        )
-        .map(([id, tokenInfo]) => [
-          id,
-          statsToTokenInfo(tokenInfo, cmcTokenStats[id]),
-        ])
-    );
-
-    await this.redisClient.set(
-      cacheKey,
-      JSON.stringify(uniTokensWithStats),
-      'PX',
-      24 * 60 * 60 * 1000
-    );
-
-    return uniTokensWithStats;
   }
 }

@@ -17,14 +17,10 @@ export default class NewQueryTokensDto {
   search?: string;
 
   @IsOptional()
-  @IsMongoId({
-    each: true,
-  })
   @ApiPropertyOptional({
     type: String,
     isArray: true,
   })
-  @Type(() => string)
   chains?: string[] = [];
 
   @IsOptional()

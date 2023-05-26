@@ -33,6 +33,16 @@ export interface CoinsPairsResponse {
       quote_token: Entity;
     };
   }[];
+  included: {
+    id: string;
+    type: string;
+    attributes: {
+      address: string;
+      name: string;
+      symbol: string;
+      coingecko_coin_id: string | null;
+    };
+  }[];
 }
 
 export interface CoinGeckoExchangesResponse {
