@@ -256,7 +256,7 @@ export class TokenService {
       coinGeckoStats
         .map((stat) => {
           const matchedCmcToken = cmcTokenList.find((cmcToken) =>
-            [cmcToken.name, cmcToken.symbol, cmcToken.slug]
+            [cmcToken.symbol, cmcToken.slug]
               .map((k) => k.toLowerCase())
               .includes(stat.symbol.toLowerCase())
           );
