@@ -49,10 +49,10 @@ export class TokenService {
 
   public async onModuleInit() {
     try {
-      // await this.syncPlatforms();
-      // await this.syncTokens();
-      // await this.syncDexs();
-      // await this.syncPairs();
+      await this.syncPlatforms();
+      await this.syncTokens();
+      await this.syncDexs();
+      await this.syncPairs();
     } catch (e) {
       Logger.error(get(e, 'message', e));
     }
