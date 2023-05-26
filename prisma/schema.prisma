@@ -11,7 +11,7 @@ datasource db {
 model Token {
     id                                       Int                     @id @default(autoincrement())
     coingecko_slug                           String                  @unique
-    cmc_slug                                 String?                 @unique
+    cmc_slug                                 String?
     image                                    String?
     launched_date                            DateTime
     name                                     String
@@ -22,10 +22,10 @@ model Token {
     price_change_perc_1h                     Float?
     price_change_perc_24h                    Float?
     price_change_perc_7d                     Float?
-    price_btc                                String                  @default("0")
-    price_eth                                String                  @default("0")
-    price_change_btc_perc_24h                Float                   @default(0)
-    price_change_eth_perc_24h                Float                   @default(0)
+    price_btc                                String
+    price_eth                                String
+    price_change_btc_perc_24h                Float
+    price_change_eth_perc_24h                Float
     market_cap                               String?
     market_cap_rank                          Int?
     market_cap_change_perc_24h               Float?
@@ -37,7 +37,7 @@ model Token {
     volume                                   String?
     volume_change_perc_24h                   Float?
     TokenBlockchainRecords                   TokenBlockchainRecord[]
-    last_updated                             DateTime                @default(now()) @updatedAt()
+    last_updated                             DateTime                @updatedAt()
 
     @@index([coingecko_slug])
     @@index([symbol])
