@@ -24,6 +24,7 @@ import {
 } from './coinGecko';
 import { bitQueryNetworksMapper, countUniqueSenders } from './bitQuery';
 import { Blockchains } from './constants';
+import { throttledHoldersStats } from './etherscan';
 
 const TOKEN_LIMIT = Number.parseInt(process.env.TOKEN_LIMIT, 10);
 const PAIRS_LIMIT = Number.parseInt(process.env.PAIRS_LIMIT, 10);
@@ -38,6 +39,13 @@ const pairsAsyncLock = new AsyncLock({
   maxOccupationTime: 60 * 1000,
 });
 
+const holdersAsyncLock = new AsyncLock({
+  maxOccupationTime: 10 * 1000,
+});
+
+const getHoldersCacheKey = (tokenId: number) =>
+  `token::holders::${tokenId.toString()}`;
+
 @Injectable()
 export class TokenService {
   public constructor(
@@ -47,10 +55,10 @@ export class TokenService {
 
   public async onModuleInit() {
     try {
-      await this.syncPlatforms();
-      await this.syncTokens();
-      await this.syncDexs();
-      await this.syncPairs();
+      // await this.syncPlatforms();
+      // await this.syncTokens();
+      // await this.syncDexs();
+      // await this.syncPairs();
     } catch (e) {
       Logger.error(get(e, 'message', e));
     }
@@ -683,5 +691,50 @@ export class TokenService {
     }
 
     Logger.debug(`syncPairs done`);
+  }
+
+  public async holders(id: string): Promise<unknown> {
+    const parsedId = Number.parseInt(id, 10);
+
+    const cacheKey = getHoldersCacheKey(parsedId);
+
+    return holdersAsyncLock.acquire(cacheKey, async () => {
+      const cached = await this.redisClient.get(cacheKey);
+
+      if (cached) {
+        return JSON.parse(cached);
+      }
+
+      const token = await this.prisma.token.findUnique({
+        where: { id: parsedId },
+        include: { TokenBlockchainRecords: { include: { Blockchain: true } } },
+      });
+
+      const holdersByBlockchains = await Promise.all(
+        token.TokenBlockchainRecords.map(async (record) =>
+          throttledHoldersStats(
+            record.Blockchain
+              .coingecko_slug as keyof typeof coingeckoNetworksMapper,
+            record.address
+          )
+        )
+      );
+
+      const commonHolderPoints = holdersByBlockchains.slice(1).reduce(
+        (commonHolders, currHolders) =>
+          commonHolders.map((point, i) => ({
+            t: point.t,
+            v:
+              point.t === currHolders?.[i]?.t
+                ? point.v + currHolders[i].v
+                : point.v,
+          })),
+        holdersByBlockchains[0]
+      );
+
+      await this.redisClient.set(cacheKey, JSON.stringify(commonHolderPoints));
+
+      return commonHolderPoints;
+    });
   }
 }
