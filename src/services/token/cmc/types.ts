@@ -1,14 +1,3 @@
-export interface CmcUniswapTokensResponse {
-  tokens: {
-    chainId: number;
-    name: string;
-    address: string;
-    decimals: number;
-    symbol: string;
-    logoURI: string;
-  }[];
-}
-
 export type CmcToken = {
   id: string;
   slug: string;
@@ -128,27 +117,6 @@ export interface CmcStats {
   };
 }
 
-export interface HasValidCmcQuote extends CmcStats {
-  quote: {
-    USD: {
-      price: number;
-      volume_24h: number | null;
-      volume_change_24h: number | null;
-      percent_change_1h: number | null;
-      percent_change_24h: number | null;
-      percent_change_7d: number | null;
-      percent_change_30d: number | null;
-      percent_change_60d: number | null;
-      percent_change_90d: number | null;
-      market_cap: number | null;
-      market_cap_dominance: number | null;
-      fully_diluted_market_cap: number | null;
-      tvl: unknown;
-      last_updated: string;
-    };
-  };
-}
-
 export interface CPCCoinsResponse {
   fields: string[];
   values: Array<number | string | number[] | string[]>;
@@ -165,7 +133,7 @@ export interface CmcCoin {
   isActive: boolean;
 }
 
-export interface CmcCoinWithStats extends CmcCoin {
+interface CmcCoinWithStats extends CmcCoin {
   liquidity: number;
   volume: string;
   volumeChangePercentage24h: number;
