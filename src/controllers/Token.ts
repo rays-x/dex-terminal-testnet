@@ -81,8 +81,8 @@ export class TokenController {
     name: 'id',
     type: String,
   })
-  async swaps(@Param() { id }: TokenIdDto, @Query() args: TokenPaginationDto) {
-    return { items: [], count: 0 };
+  async swaps(@Param() { id }: TokenIdNumberDto) {
+    return this.service.swaps(id);
   }
 
   @Get('token/:id/traders')
