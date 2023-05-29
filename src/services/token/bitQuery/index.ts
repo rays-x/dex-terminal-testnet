@@ -2,6 +2,7 @@ import got from 'got';
 import pThrottle from 'p-throttle';
 import { bitQueryNetworksMapper } from './constants';
 import { TradesResponse } from './types';
+import { Point } from '../types';
 
 const { BITQUERY_API_KEY } = process.env;
 
@@ -78,7 +79,7 @@ export const getSwapsStats = pThrottle({
     token: string,
     from: Date,
     till: Date
-  ): Promise<{ t: number; v: number }[]> => {
+  ): Promise<Point[]> => {
     const { body } = await got.post<TradesResponse>(
       'https://graphql.bitquery.io/',
       {

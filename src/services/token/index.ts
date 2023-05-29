@@ -29,10 +29,18 @@ import {
 } from './bitQuery';
 import { Blockchains } from './constants';
 import { throttledHoldersStats } from './etherscan';
+import { Point } from './types';
 
 const TOKEN_LIMIT = Number.parseInt(process.env.TOKEN_LIMIT, 10);
 const PAIRS_LIMIT = Number.parseInt(process.env.PAIRS_LIMIT, 10);
 
+const HOLDERS_STATS_EXPIRE =
+  Number.parseInt(process.env.HOLDERS_STATS_EXPIRE_SEC, 10) * 1000;
+
+const SWAPS_STATS_EXPIRE =
+  Number.parseInt(process.env.SWAPS_STATS_EXPIRE_SEC, 10) * 1000;
+
+/* stats for last 30 days */
 const SWAPS_STATS_INTERVAL = 30 * 24 * 60 * 60 * 1000;
 
 const PAIRS_UPDATE_INTERVAL = 15 * 60 * 1000;
@@ -706,7 +714,7 @@ export class TokenService {
     Logger.debug(`syncPairs done`);
   }
 
-  public async holders(id: string): Promise<unknown> {
+  public async holders(id: string): Promise<Point[]> {
     const parsedId = Number.parseInt(id, 10);
 
     const cacheKey = getHoldersCacheKey(parsedId);
@@ -749,13 +757,18 @@ export class TokenService {
         holdersByBlockchains[0]
       );
 
-      await this.redisClient.set(cacheKey, JSON.stringify(commonHolderPoints));
+      await this.redisClient.set(
+        cacheKey,
+        JSON.stringify(commonHolderPoints),
+        'EX',
+        HOLDERS_STATS_EXPIRE
+      );
 
       return commonHolderPoints;
     });
   }
 
-  public async swaps(id: string): Promise<unknown> {
+  public async swaps(id: string): Promise<Point[]> {
     const parsedId = Number.parseInt(id, 10);
 
     const cacheKey = getSwapsCacheKey(parsedId);
@@ -786,7 +799,7 @@ export class TokenService {
             record.address,
             from,
             till
-          ).catch(() => [] as { t: number; v: number }[])
+          ).catch(() => [] as Point[])
         )
       );
 
@@ -802,7 +815,12 @@ export class TokenService {
         tradesByBlockchains[0]
       );
 
-      await this.redisClient.set(cacheKey, JSON.stringify(commonTradePoints));
+      await this.redisClient.set(
+        cacheKey,
+        JSON.stringify(commonTradePoints),
+        'EX',
+        SWAPS_STATS_EXPIRE
+      );
 
       return commonTradePoints;
     });

@@ -5,7 +5,6 @@ import TokenIdNumberDto from 'dto/coinMarketCapScraper/TokenIdStringDto';
 import {
   NewQueryTokensDto,
   TokenIdDto,
-  TokenIdStringDto,
   TokenPaginationDto,
   TokenSlugDto,
 } from '../dto/coinMarketCapScraper';

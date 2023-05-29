@@ -11,3 +11,10 @@ export type BlockchainInfo = Record<
     image: string;
   }
 >;
+
+export interface Point<T = number> {
+  /* timestamp */
+  t: number;
+  /* value */
+  v: T;
+}
