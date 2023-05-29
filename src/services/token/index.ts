@@ -22,12 +22,26 @@ import {
   getPoolInfo,
   invertedCoingeckoNetworksMapper,
 } from './coinGecko';
-import { bitQueryNetworksMapper, countUniqueSenders } from './bitQuery';
+import {
+  bitQueryNetworksMapper,
+  countUniqueSenders,
+  getSwapsStats,
+} from './bitQuery';
 import { Blockchains } from './constants';
 import { throttledHoldersStats } from './etherscan';
+import { Point } from './types';
 
 const TOKEN_LIMIT = Number.parseInt(process.env.TOKEN_LIMIT, 10);
 const PAIRS_LIMIT = Number.parseInt(process.env.PAIRS_LIMIT, 10);
+
+const HOLDERS_STATS_EXPIRE =
+  Number.parseInt(process.env.HOLDERS_STATS_EXPIRE_SEC, 10) * 1000;
+
+const SWAPS_STATS_EXPIRE =
+  Number.parseInt(process.env.SWAPS_STATS_EXPIRE_SEC, 10) * 1000;
+
+/* stats for last 30 days */
+const SWAPS_STATS_INTERVAL = 30 * 24 * 60 * 60 * 1000;
 
 const PAIRS_UPDATE_INTERVAL = 15 * 60 * 1000;
 
@@ -43,8 +57,15 @@ const holdersAsyncLock = new AsyncLock({
   maxOccupationTime: 10 * 1000,
 });
 
+const swapsAsyncLock = new AsyncLock({
+  maxOccupationTime: 60 * 1000,
+});
+
 const getHoldersCacheKey = (tokenId: number) =>
   `token::holders::${tokenId.toString()}`;
+
+const getSwapsCacheKey = (tokenId: number) =>
+  `token::swaps::${tokenId.toString()}`;
 
 @Injectable()
 export class TokenService {
@@ -55,10 +76,10 @@ export class TokenService {
 
   public async onModuleInit() {
     try {
-      // await this.syncPlatforms();
-      // await this.syncTokens();
-      // await this.syncDexs();
-      // await this.syncPairs();
+      await this.syncPlatforms();
+      await this.syncTokens();
+      await this.syncDexs();
+      await this.syncPairs();
     } catch (e) {
       Logger.error(get(e, 'message', e));
     }
@@ -693,7 +714,7 @@ export class TokenService {
     Logger.debug(`syncPairs done`);
   }
 
-  public async holders(id: string): Promise<unknown> {
+  public async holders(id: string): Promise<Point[]> {
     const parsedId = Number.parseInt(id, 10);
 
     const cacheKey = getHoldersCacheKey(parsedId);
@@ -709,6 +730,10 @@ export class TokenService {
         where: { id: parsedId },
         include: { TokenBlockchainRecords: { include: { Blockchain: true } } },
       });
+
+      if (!token) {
+        throw new HttpException({}, HttpStatus.NOT_FOUND);
+      }
 
       const holdersByBlockchains = await Promise.all(
         token.TokenBlockchainRecords.map(async (record) =>
@@ -732,9 +757,72 @@ export class TokenService {
         holdersByBlockchains[0]
       );
 
-      await this.redisClient.set(cacheKey, JSON.stringify(commonHolderPoints));
+      await this.redisClient.set(
+        cacheKey,
+        JSON.stringify(commonHolderPoints),
+        'EX',
+        HOLDERS_STATS_EXPIRE
+      );
 
       return commonHolderPoints;
+    });
+  }
+
+  public async swaps(id: string): Promise<Point[]> {
+    const parsedId = Number.parseInt(id, 10);
+
+    const cacheKey = getSwapsCacheKey(parsedId);
+
+    return swapsAsyncLock.acquire(cacheKey, async () => {
+      const cached = await this.redisClient.get(cacheKey);
+
+      if (cached) {
+        return JSON.parse(cached);
+      }
+
+      const token = await this.prisma.token.findUnique({
+        where: { id: parsedId },
+        include: { TokenBlockchainRecords: { include: { Blockchain: true } } },
+      });
+
+      if (!token) {
+        throw new HttpException({}, HttpStatus.NOT_FOUND);
+      }
+
+      const from = new Date(Date.now() - SWAPS_STATS_INTERVAL);
+      const till = new Date();
+
+      const tradesByBlockchains = await Promise.all(
+        token.TokenBlockchainRecords.map(async (record) =>
+          getSwapsStats(
+            bitQueryNetworksMapper[record.Blockchain.coingecko_slug],
+            record.address,
+            from,
+            till
+          ).catch(() => [] as Point[])
+        )
+      );
+
+      const commonTradePoints = tradesByBlockchains.slice(1).reduce(
+        (commonTrades, currTrades) =>
+          commonTrades.map((point, i) => ({
+            t: point.t,
+            v:
+              point.t === currTrades?.[i]?.t
+                ? point.v + currTrades[i].v
+                : point.v,
+          })),
+        tradesByBlockchains[0]
+      );
+
+      await this.redisClient.set(
+        cacheKey,
+        JSON.stringify(commonTradePoints),
+        'EX',
+        SWAPS_STATS_EXPIRE
+      );
+
+      return commonTradePoints;
     });
   }
 }
