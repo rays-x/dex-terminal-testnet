@@ -2,7 +2,7 @@ import got from 'got';
 import pThrottle from 'p-throttle';
 import { bitQueryNetworksMapper } from './constants';
 
-const BQ_API_KEY = 'BQYDrGIlYKPdXIlxkRZmJtwKKvCtrS4X';
+const { BITQUERY_API_KEY } = process.env;
 
 export interface UniqueSendersResponse {
   data: {
@@ -40,7 +40,7 @@ const throttled = pThrottle({
         'sec-fetch-dest': 'empty',
         'sec-fetch-mode': 'cors',
         'sec-fetch-site': 'same-site',
-        'x-api-key': BQ_API_KEY,
+        'x-api-key': BITQUERY_API_KEY,
       },
       body: JSON.stringify({
         query:
