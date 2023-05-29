@@ -82,8 +82,8 @@ export async function getCoinGeckoCoinsWithStats(
   order: 'market_cap_desc' | 'volume_desc'
 ): Promise<CoinGeckoStatsResponse> {
   const responses = await Promise.all(
-    Array.from({ length: limit / PER_PAGE }, (_, i) => i + 1).map((l) =>
-      throttledCoinGeckoMarkets(l, order)
+    Array.from({ length: Math.ceil(limit / PER_PAGE) }, (_, i) => i + 1).map(
+      (l) => throttledCoinGeckoMarkets(l, order)
     )
   );
 
