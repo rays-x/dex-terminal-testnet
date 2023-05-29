@@ -1,6 +1,7 @@
 import { Controller, Get, HttpCode, Param, Query } from '@nestjs/common';
 import { ApiParam, ApiTags } from '@nestjs/swagger';
 import { TokenService } from 'services/token';
+import TokenIdNumberDto from 'dto/coinMarketCapScraper/TokenIdStringDto';
 import {
   NewQueryTokensDto,
   TokenIdDto,
@@ -84,19 +85,6 @@ export class TokenController {
     return { items: [], count: 0 };
   }
 
-  @Get('token/:id/holders')
-  @HttpCode(200)
-  @ApiParam({
-    name: 'id',
-    type: String,
-  })
-  async holders(
-    @Param() { id }: TokenIdDto,
-    @Query() args: TokenPaginationDto
-  ) {
-    return { items: [], count: 0 };
-  }
-
   @Get('token/:id/traders')
   @HttpCode(200)
   @ApiParam({
@@ -120,16 +108,13 @@ export class TokenController {
     return this.service.pairs(id, args);
   }
 
-  @Get('token/:id/transactions')
+  @Get('token/:id/holders')
   @HttpCode(200)
   @ApiParam({
     name: 'id',
     type: String,
   })
-  async transactions(
-    @Param() { id }: TokenIdStringDto,
-    @Query() args: TokenPaginationDto
-  ) {
-    return { items: [], count: 0 };
+  async holders(@Param() { id }: TokenIdNumberDto) {
+    return this.service.holders(id);
   }
 }

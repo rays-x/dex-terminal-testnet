@@ -1,8 +1,8 @@
-import { IsMongoId } from 'class-validator';
+import { IsNumberString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
-export default class TokenIdStringDto {
-  @IsMongoId()
+export default class TokenIdNumberDto {
+  @IsNumberString()
   @ApiProperty()
   id!: string;
 }
