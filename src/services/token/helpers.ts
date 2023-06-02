@@ -72,11 +72,12 @@ export function mapDbTokenToResponse(
       Blockchain: Blockchain;
     })[];
   }
-): CmcToken & { platforms: unknown[]; statistics: unknown } {
+): CmcToken & { platforms: unknown[]; statistics: unknown; rank?: number } {
   return {
     id: dbToken.id.toString(),
     slug: dbToken.coingecko_slug,
     cmcSlug: dbToken.cmc_slug,
+    rank: dbToken.market_cap_rank,
     name: dbToken.name,
     symbol: dbToken.symbol.toUpperCase(),
     logoURI: dbToken.image || '',
