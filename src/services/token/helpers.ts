@@ -201,6 +201,7 @@ export async function getSelectTokensQuery(
         symbol: sortOrder,
       },
       skip: offset,
+      include: { TokenBlockchainRecords: { include: { Blockchain: true } } },
     });
   }
 
@@ -215,6 +216,7 @@ export async function getSelectTokensQuery(
         volume_change_perc_24h: sortOrder,
       },
       skip: offset,
+      include: { TokenBlockchainRecords: { include: { Blockchain: true } } },
     });
   }
 
@@ -229,6 +231,7 @@ export async function getSelectTokensQuery(
         price_change_perc_1h: sortOrder,
       },
       skip: offset,
+      include: { TokenBlockchainRecords: { include: { Blockchain: true } } },
     });
   }
 
@@ -243,6 +246,7 @@ export async function getSelectTokensQuery(
         price_change_perc_24h: sortOrder,
       },
       skip: offset,
+      include: { TokenBlockchainRecords: { include: { Blockchain: true } } },
     });
   }
 
@@ -259,5 +263,6 @@ export async function getSelectTokensQuery(
           : TokensSortOrder.asc,
     },
     skip: offset,
+    include: { TokenBlockchainRecords: { include: { Blockchain: true } } },
   });
 }
